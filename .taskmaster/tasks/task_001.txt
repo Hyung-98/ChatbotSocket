@@ -1,0 +1,59 @@
+# Task ID: 1
+# Title: 프로젝트 환경 설정 및 모노레포 구성
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Next.js 14와 NestJS 기반의 모노레포 프로젝트 구조를 설정하고 Docker Compose로 개발 환경 구성
+# Details:
+1. Turborepo 또는 Nx를 사용하여 모노레포 설정
+2. 프론트엔드(Next.js 14 App Router)와 백엔드(NestJS) 프로젝트 생성
+3. TypeScript 설정 및 공유 타입 디렉토리 구성
+4. ESLint, Prettier 등 코드 품질 도구 설정
+5. Docker Compose 파일 작성 (PostgreSQL, Redis 포함)
+6. 개발 환경 스크립트 구성 (dev, build, test)
+
+```bash
+# 모노레포 설정 예시 (Turborepo 사용)
+npx create-turbo@latest
+
+# apps/frontend 디렉토리에 Next.js 설정
+cd apps/frontend
+npx create-next-app@latest . --typescript --eslint --app --src-dir
+
+# apps/backend 디렉토리에 NestJS 설정
+cd ../backend
+nest new . --package-manager npm
+
+# Docker Compose 파일 작성
+touch docker-compose.yml
+```
+
+```yaml
+# docker-compose.yml 예시
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chatbot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
+```
+
+# Test Strategy:
+1. 모노레포 빌드 스크립트 실행 테스트
+2. Docker Compose 환경 실행 및 접속 테스트
+3. 프론트엔드/백엔드 개발 서버 실행 확인
+4. TypeScript 타입 검사 및 린트 검사 실행

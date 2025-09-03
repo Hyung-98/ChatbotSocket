@@ -1,0 +1,265 @@
+# Task ID: 12
+# Title: 관리자 대시보드 구현
+# Status: pending
+# Dependencies: 2, 3, 8
+# Priority: low
+# Description: 대화 로그 모니터링, 사용자 통계, 에러 로깅 등을 제공하는 관리자 대시보드 구현
+# Details:
+1. 관리자 인증 및 권한 관리 구현
+2. 대화 로그 조회 및 필터링 기능 구현
+3. 사용자/방별 통계 시각화
+4. 에러 로그 모니터링
+5. LLM 토큰 사용량 추적
+
+```typescript
+// backend/src/admin/admin.controller.ts
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { AdminService } from './admin.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminGuard } from './admin.guard';
+
+@Controller('admin')
+@UseGuards(JwtAuthGuard, AdminGuard)
+export class AdminController {
+  constructor(private readonly adminService: AdminService) {}
+
+  @Get('stats/users')
+  async getUserStats(@Query() query) {
+    return this.adminService.getUserStats({
+      startDate: query.startDate ? new Date(query.startDate) : undefined,
+      endDate: query.endDate ? new Date(query.endDate) : undefined,
+    });
+  }
+
+  @Get('stats/rooms')
+  async getRoomStats(@Query() query) {
+    return this.adminService.getRoomStats({
+      startDate: query.startDate ? new Date(query.startDate) : undefined,
+      endDate: query.endDate ? new Date(query.endDate) : undefined,
+    });
+  }
+
+  @Get('stats/messages')
+  async getMessageStats(@Query() query) {
+    return this.adminService.getMessageStats({
+      startDate: query.startDate ? new Date(query.startDate) : undefined,
+      endDate: query.endDate ? new Date(query.endDate) : undefined,
+    });
+  }
+
+  @Get('logs/errors')
+  async getErrorLogs(@Query() query) {
+    return this.adminService.getErrorLogs({
+      skip: query.skip ? parseInt(query.skip) : 0,
+      take: query.take ? parseInt(query.take) : 50,
+    });
+  }
+
+  @Get('logs/tokens')
+  async getTokenUsage(@Query() query) {
+    return this.adminService.getTokenUsage({
+      startDate: query.startDate ? new Date(query.startDate) : undefined,
+      endDate: query.endDate ? new Date(query.endDate) : undefined,
+    });
+  }
+}
+```
+
+```typescript
+// backend/src/admin/admin.service.ts
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Injectable()
+export class AdminService {
+  constructor(private prisma: PrismaService) {}
+
+  async getUserStats(options: { startDate?: Date; endDate?: Date }) {
+    const where = this.getDateFilter(options);
+
+    const totalUsers = await this.prisma.user.count();
+    const newUsers = await this.prisma.user.count({
+      where,
+    });
+
+    const activeUsers = await this.prisma.$queryRaw`
+      SELECT COUNT(DISTINCT "userId") 
+      FROM "Message"
+      WHERE "userId" IS NOT NULL
+        AND "createdAt" >= ${options.startDate || new Date(0)}
+        AND "createdAt" <= ${options.endDate || new Date()}
+    `;
+
+    return {
+      totalUsers,
+      newUsers,
+      activeUsers: Number(activeUsers[0].count),
+    };
+  }
+
+  async getRoomStats(options: { startDate?: Date; endDate?: Date }) {
+    const where = this.getDateFilter(options);
+
+    const totalRooms = await this.prisma.room.count();
+    const newRooms = await this.prisma.room.count({
+      where,
+    });
+
+    const activeRooms = await this.prisma.$queryRaw`
+      SELECT COUNT(DISTINCT "roomId") 
+      FROM "Message"
+      WHERE "createdAt" >= ${options.startDate || new Date(0)}
+        AND "createdAt" <= ${options.endDate || new Date()}
+    `;
+
+    return {
+      totalRooms,
+      newRooms,
+      activeRooms: Number(activeRooms[0].count),
+    };
+  }
+
+  async getMessageStats(options: { startDate?: Date; endDate?: Date }) {
+    const where = this.getDateFilter(options);
+
+    const totalMessages = await this.prisma.message.count();
+    const userMessages = await this.prisma.message.count({
+      where: {
+        ...where,
+        role: 'user',
+      },
+    });
+    const botMessages = await this.prisma.message.count({
+      where: {
+        ...where,
+        role: 'bot',
+      },
+    });
+
+    return {
+      totalMessages,
+      userMessages,
+      botMessages,
+    };
+  }
+
+  async getErrorLogs(options: { skip: number; take: number }) {
+    // 실제 구현에서는 별도의 에러 로그 테이블이 필요
+    return [];
+  }
+
+  async getTokenUsage(options: { startDate?: Date; endDate?: Date }) {
+    // 실제 구현에서는 별도의 토큰 사용량 추적 테이블이 필요
+    return {
+      totalTokens: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+    };
+  }
+
+  private getDateFilter(options: { startDate?: Date; endDate?: Date }) {
+    const filter: any = {};
+
+    if (options.startDate || options.endDate) {
+      filter.createdAt = {};
+
+      if (options.startDate) {
+        filter.createdAt.gte = options.startDate;
+      }
+
+      if (options.endDate) {
+        filter.createdAt.lte = options.endDate;
+      }
+    }
+
+    return filter;
+  }
+}
+```
+
+```tsx
+// frontend/src/app/admin/dashboard/page.tsx
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { Bar, Line } from 'react-chartjs-2';
+import { Chart, registerables } from 'chart.js';
+
+Chart.register(...registerables);
+
+export default function AdminDashboard() {
+  const { data: session } = useSession();
+  const [userStats, setUserStats] = useState(null);
+  const [roomStats, setRoomStats] = useState(null);
+  const [messageStats, setMessageStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [userRes, roomRes, messageRes] = await Promise.all([
+          fetch('/api/admin/stats/users'),
+          fetch('/api/admin/stats/rooms'),
+          fetch('/api/admin/stats/messages'),
+        ]);
+        
+        const userData = await userRes.json();
+        const roomData = await roomRes.json();
+        const messageData = await messageRes.json();
+        
+        setUserStats(userData);
+        setRoomStats(roomData);
+        setMessageStats(messageData);
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (session) {
+      fetchStats();
+    }
+  }, [session]);
+  
+  if (loading) return <div>Loading...</div>;
+  
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-6">Admin Dashboard</h1>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-lg font-semibold mb-2">Users</h2>
+          <div className="text-3xl font-bold">{userStats?.totalUsers || 0}</div>
+          <div className="text-sm text-gray-500">New: {userStats?.newUsers || 0}</div>
+        </div>
+        
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-lg font-semibold mb-2">Rooms</h2>
+          <div className="text-3xl font-bold">{roomStats?.totalRooms || 0}</div>
+          <div className="text-sm text-gray-500">New: {roomStats?.newRooms || 0}</div>
+        </div>
+        
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-lg font-semibold mb-2">Messages</h2>
+          <div className="text-3xl font-bold">{messageStats?.totalMessages || 0}</div>
+          <div className="text-sm text-gray-500">
+            User: {messageStats?.userMessages || 0} / Bot: {messageStats?.botMessages || 0}
+          </div>
+        </div>
+      </div>
+      
+      {/* 차트 및 추가 통계 */}
+    </div>
+  );
+}
+```
+
+# Test Strategy:
+1. 관리자 인증 및 권한 테스트
+2. 통계 데이터 조회 및 계산 정확성 테스트
+3. 대시보드 UI 렌더링 테스트
+4. 필터링 및 날짜 범위 선택 테스트
+5. 차트 및 데이터 시각화 테스트

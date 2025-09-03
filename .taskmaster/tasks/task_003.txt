@@ -1,0 +1,92 @@
+# Task ID: 3
+# Title: 사용자 인증 시스템 구현 (NextAuth.js + JWT)
+# Status: pending
+# Dependencies: 1, 2
+# Priority: high
+# Description: NextAuth.js를 사용한 프론트엔드 인증 및 NestJS JWT 검증 시스템 구현
+# Details:
+1. NextAuth.js 설정 (Next.js 14 App Router 호환)
+2. JWT 전략 구성 및 비밀키 설정
+3. 로그인/로그아웃 API 엔드포인트 구현
+4. NestJS JWT 검증 미들웨어 구현
+5. 소켓 핸드셰이크 시 토큰 검증 로직 추가
+
+```typescript
+// frontend/src/app/api/auth/[...nextauth]/route.ts
+import NextAuth from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
+
+const handler = NextAuth({
+  providers: [
+    CredentialsProvider({
+      name: 'Credentials',
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" }
+      },
+      async authorize(credentials) {
+        // API 호출하여 사용자 인증
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+          method: 'POST',
+          body: JSON.stringify(credentials),
+          headers: { "Content-Type": "application/json" }
+        });
+        const user = await res.json();
+        
+        if (res.ok && user) {
+          return user;
+        }
+        return null;
+      }
+    })
+  ],
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30일
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.id;
+      }
+      return session;
+    }
+  }
+});
+
+export { handler as GET, handler as POST };
+```
+
+```typescript
+// backend/src/auth/auth.module.ts
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { AuthService } from './auth.service';
+import { AuthController } from './auth.controller';
+
+@Module({
+  imports: [
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: { expiresIn: '30d' },
+    }),
+  ],
+  controllers: [AuthController],
+  providers: [AuthService],
+  exports: [AuthService],
+})
+export class AuthModule {}
+```
+
+# Test Strategy:
+1. 로그인/로그아웃 플로우 단위 테스트
+2. JWT 토큰 생성 및 검증 테스트
+3. 인증된/인증되지 않은 요청에 대한 API 응답 테스트
+4. 만료된 토큰 처리 테스트
+5. 소켓 연결 시 인증 테스트

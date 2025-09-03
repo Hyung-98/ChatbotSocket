@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  password  String
+  messages  Message[]
+
+  @@map("users")
+}
+
+model Room {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@map("rooms")
+}
+
+model Message {
+  id        String                 @id @default(uuid())
+  content   String
+  role      String
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+  roomId    String
+  userId    String?
+  embedding Unsupported("vector")?
+  room      Room                   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User?                  @relation(fields: [userId], references: [id])
+
+  @@map("messages")
+}

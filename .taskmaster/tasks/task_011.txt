@@ -1,0 +1,153 @@
+# Task ID: 11
+# Title: 멀티 디바이스 동기화 구현
+# Status: pending
+# Dependencies: 4, 5
+# Priority: medium
+# Description: 동일 사용자의 여러 디바이스에서 접속 시 메시지 및 상태를 동기화하는 기능 구현
+# Details:
+1. 사용자별 소켓 연결 관리 구현
+2. 디바이스 식별 및 그룹화 로직 구현
+3. 사용자 기반 룸 구독 관리
+4. 상태 동기화 이벤트 구현
+5. 오프라인 메시지 처리
+
+```typescript
+// backend/src/chat/user-connection.service.ts
+import { Injectable } from '@nestjs/common';
+import { Socket } from 'socket.io';
+
+@Injectable()
+export class UserConnectionService {
+  // userId -> Set<socketId>
+  private userConnections: Map<string, Set<string>> = new Map();
+  // socketId -> userId
+  private socketUsers: Map<string, string> = new Map();
+  
+  addConnection(userId: string, socket: Socket): void {
+    if (!this.userConnections.has(userId)) {
+      this.userConnections.set(userId, new Set());
+    }
+    
+    this.userConnections.get(userId).add(socket.id);
+    this.socketUsers.set(socket.id, userId);
+  }
+  
+  removeConnection(socket: Socket): void {
+    const userId = this.socketUsers.get(socket.id);
+    if (!userId) return;
+    
+    this.socketUsers.delete(socket.id);
+    
+    const userSockets = this.userConnections.get(userId);
+    if (userSockets) {
+      userSockets.delete(socket.id);
+      if (userSockets.size === 0) {
+        this.userConnections.delete(userId);
+      }
+    }
+  }
+  
+  getUserSockets(userId: string): string[] {
+    const sockets = this.userConnections.get(userId);
+    return sockets ? Array.from(sockets) : [];
+  }
+  
+  getUserId(socketId: string): string | undefined {
+    return this.socketUsers.get(socketId);
+  }
+  
+  isUserOnline(userId: string): boolean {
+    const sockets = this.userConnections.get(userId);
+    return !!sockets && sockets.size > 0;
+  }
+}
+```
+
+```typescript
+// backend/src/chat/chat.gateway.ts (수정)
+import { UserConnectionService } from './user-connection.service';
+
+@WebSocketGateway()
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  constructor(
+    // 기존 의존성...
+    private userConnectionService: UserConnectionService,
+  ) {}
+  
+  async handleConnection(client: Socket) {
+    try {
+      // 기존 인증 코드...
+      
+      // 사용자 연결 추가
+      this.userConnectionService.addConnection(user.id, client);
+      
+      // 사용자가 참여 중인 룸 목록 조회
+      const rooms = await this.prismaService.room.findMany({
+        where: {
+          messages: {
+            some: {
+              userId: user.id,
+            },
+          },
+        },
+      });
+      
+      // 각 룸에 자동 참여
+      rooms.forEach(room => {
+        client.join(room.id);
+      });
+      
+      // 연결 상태 브로드캐스트 (선택적)
+      this.server.emit('user_status', {
+        userId: user.id,
+        status: 'online',
+      });
+    } catch (error) {
+      client.disconnect();
+    }
+  }
+  
+  handleDisconnect(client: Socket) {
+    const userId = this.userConnectionService.getUserId(client.id);
+    
+    // 연결 제거
+    this.userConnectionService.removeConnection(client);
+    
+    // 마지막 연결이 끊어진 경우 상태 업데이트
+    if (userId && !this.userConnectionService.isUserOnline(userId)) {
+      this.server.emit('user_status', {
+        userId,
+        status: 'offline',
+      });
+    }
+  }
+  
+  @SubscribeMessage('sync_read')
+  handleSyncRead(client: Socket, payload: { roomId: string, messageId: string }) {
+    const userId = this.userConnectionService.getUserId(client.id);
+    if (!userId) return;
+    
+    // 같은 사용자의 다른 소켓에 읽음 상태 동기화
+    const userSockets = this.userConnectionService.getUserSockets(userId);
+    
+    userSockets.forEach(socketId => {
+      if (socketId !== client.id) { // 현재 소켓 제외
+        this.server.to(socketId).emit('read_receipt', {
+          roomId: payload.roomId,
+          messageId: payload.messageId,
+          userId,
+        });
+      }
+    });
+  }
+  
+  // 기존 메서드들...
+}
+```
+
+# Test Strategy:
+1. 다중 소켓 연결 테스트
+2. 사용자별 연결 관리 테스트
+3. 디바이스 간 메시지 동기화 테스트
+4. 연결/연결 해제 시 상태 업데이트 테스트
+5. 오프라인 메시지 처리 테스트

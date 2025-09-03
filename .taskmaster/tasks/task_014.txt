@@ -1,0 +1,183 @@
+# Task ID: 14
+# Title: 보안 강화 및 Rate Limiting 구현
+# Status: pending
+# Dependencies: 3, 4
+# Priority: medium
+# Description: JWT 인증, 메시지 길이/빈도 제한, Rate Limiting 등 보안 기능 강화
+# Details:
+1. JWT 토큰 보안 강화 (만료, 갱신)
+2. 소켓 연결 제한 구현
+3. 메시지 길이 및 빈도 제한 구현
+4. API Rate Limiting 구현
+5. 입력 검증 및 이스케이핑
+
+```typescript
+// backend/src/common/guards/throttle.guard.ts
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { ThrottlerException, ThrottlerOptions } from '@nestjs/throttler';
+import { RedisService } from '../redis/redis.service';
+
+@Injectable()
+export class SocketThrottlerGuard implements CanActivate {
+  constructor(
+    private readonly redisService: RedisService,
+    private readonly options: ThrottlerOptions = { limit: 10, ttl: 60 },
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const client = context.switchToWs().getClient();
+    const userId = client.data?.user?.id;
+    
+    if (!userId) return true; // 인증되지 않은 요청은 다른 가드에서 처리
+    
+    const event = context.getHandler().name;
+    const key = `throttle:${userId}:${event}`;
+    
+    const redis = this.redisService.getClient();
+    const current = await redis.incr(key);
+    
+    if (current === 1) {
+      await redis.expire(key, this.options.ttl);
+    }
+    
+    if (current > this.options.limit) {
+      throw new ThrottlerException();
+    }
+    
+    return true;
+  }
+}
+```
+
+```typescript
+// backend/src/chat/chat.gateway.ts (수정)
+import { UseGuards } from '@nestjs/common';
+import { SocketThrottlerGuard } from '../common/guards/throttle.guard';
+
+@WebSocketGateway()
+export class ChatGateway {
+  // 기존 코드...
+  
+  @UseGuards(SocketThrottlerGuard)
+  @SubscribeMessage('send')
+  async handleMessage(client: Socket, payload: { roomId: string, text: string }) {
+    // 메시지 길이 제한
+    if (payload.text.length > 2000) {
+      client.emit('error', { message: 'Message too long' });
+      return { error: 'Message too long' };
+    }
+    
+    // 기존 코드...
+  }
+}
+```
+
+```typescript
+// backend/src/main.ts (수정)
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  
+  // 전역 검증 파이프
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+  
+  // API Rate Limiting
+  app.register(ThrottlerModule.forRoot({
+    ttl: 60,
+    limit: 100,
+  }));
+  
+  app.register({
+    provide: APP_GUARD,
+    useClass: ThrottlerGuard,
+  });
+  
+  // 기존 코드...
+  
+  await app.listen(3000);
+}
+bootstrap();
+```
+
+```typescript
+// backend/src/auth/auth.service.ts (수정)
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private jwtService: JwtService,
+    private prismaService: PrismaService,
+  ) {}
+
+  async validateUser(email: string, password: string) {
+    const user = await this.prismaService.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    return user;
+  }
+
+  async login(user: any) {
+    const payload = { sub: user.id, email: user.email };
+    
+    return {
+      accessToken: this.jwtService.sign(payload, { expiresIn: '1h' }),
+      refreshToken: this.jwtService.sign(payload, { expiresIn: '7d' }),
+    };
+  }
+
+  async refreshToken(refreshToken: string) {
+    try {
+      const payload = this.jwtService.verify(refreshToken);
+      const user = await this.prismaService.user.findUnique({
+        where: { id: payload.sub },
+      });
+
+      if (!user) {
+        throw new UnauthorizedException();
+      }
+
+      return {
+        accessToken: this.jwtService.sign(
+          { sub: user.id, email: user.email },
+          { expiresIn: '1h' },
+        ),
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+  }
+}
+```
+
+# Test Strategy:
+1. JWT 토큰 보안 테스트 (만료, 갱신)
+2. Rate Limiting 동작 테스트
+3. 메시지 길이 및 빈도 제한 테스트
+4. 입력 검증 및 이스케이핑 테스트
+5. 보안 취약점 테스트 (CSRF, XSS 등)

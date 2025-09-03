@@ -1,0 +1,70 @@
+# Task ID: 2
+# Title: 데이터베이스 스키마 및 Prisma ORM 설정
+# Status: pending
+# Dependencies: 1
+# Priority: high
+# Description: PostgreSQL 데이터베이스 스키마를 설계하고 Prisma ORM을 설정하여 User, Room, Message 모델 구현
+# Details:
+1. Prisma CLI 설치 및 초기화
+2. PRD에 명시된 User, Room, Message 모델 스키마 정의
+3. pgvector 확장 설정 (벡터 검색용)
+4. 마이그레이션 스크립트 작성
+5. Prisma Client 생성 및 NestJS 서비스에 통합
+
+```typescript
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  name      String
+  createdAt DateTime  @default(now())
+  messages  Message[]
+}
+
+model Room {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+  messages  Message[]
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  role      String   // "user" | "bot"
+  createdAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id])
+  roomId    String
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+  // 벡터 저장을 위한 필드 추가
+  embedding Unsupported("vector")?
+}
+```
+
+```bash
+# Prisma 설치 및 초기화
+npm install prisma --save-dev
+npx prisma init
+
+# 마이그레이션 실행
+npx prisma migrate dev --name init
+
+# Prisma Client 생성
+npx prisma generate
+```
+
+# Test Strategy:
+1. 마이그레이션 스크립트 실행 테스트
+2. 테스트 데이터 삽입 및 조회 테스트
+3. 관계 모델 쿼리 테스트 (Room-Message, User-Message)
+4. pgvector 확장 기능 테스트

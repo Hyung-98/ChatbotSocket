@@ -1,0 +1,80 @@
+# Task ID: 5
+# Title: Redis Adapter 구현 (수평 확장 지원)
+# Status: pending
+# Dependencies: 1, 4
+# Priority: medium
+# Description: Socket.IO의 Redis Adapter를 구현하여 다중 서버 인스턴스 간 메시지 동기화 지원
+# Details:
+1. Redis 클라이언트 설정
+2. Socket.IO Redis Adapter 구성
+3. NestJS 게이트웨이에 Redis Adapter 연결
+4. 다중 인스턴스 테스트 환경 구성
+
+```typescript
+// backend/src/chat/chat.module.ts
+import { Module } from '@nestjs/common';
+import { ChatGateway } from './chat.gateway';
+import { ChatService } from './chat.service';
+import { AuthModule } from '../auth/auth.module';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Redis } from 'ioredis';
+
+@Module({
+  imports: [AuthModule, ConfigModule],
+  providers: [
+    ChatGateway,
+    ChatService,
+    {
+      provide: 'REDIS_ADAPTER',
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const pubClient = new Redis({
+          host: configService.get('REDIS_HOST'),
+          port: configService.get('REDIS_PORT'),
+        });
+        const subClient = pubClient.duplicate();
+        
+        return createAdapter(pubClient, subClient);
+      },
+    },
+  ],
+})
+export class ChatModule {}
+```
+
+```typescript
+// backend/src/chat/chat.gateway.ts (수정)
+import { WebSocketGateway, WebSocketServer, SubscribeMessage, OnGatewayInit } from '@nestjs/websockets';
+import { Server } from 'socket.io';
+import { Inject } from '@nestjs/common';
+
+@WebSocketGateway({
+  cors: {
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  },
+})
+export class ChatGateway implements OnGatewayInit {
+  @WebSocketServer() server: Server;
+  
+  constructor(
+    @Inject('REDIS_ADAPTER') private redisAdapter,
+    private authService: AuthService
+  ) {}
+  
+  afterInit(server: Server) {
+    server.adapter(this.redisAdapter);
+    console.log('Socket.IO server initialized with Redis adapter');
+  }
+  
+  // 기존 메서드들...
+}
+```
+
+# Test Strategy:
+1. 단일 Redis 인스턴스 연결 테스트
+2. 다중 NestJS 인스턴스 간 메시지 전달 테스트
+3. Redis 연결 실패 시 폴백 메커니즘 테스트
+4. 부하 테스트 (다중 인스턴스에서 동시 메시지 처리)
+5. Redis 클러스터 연결 테스트

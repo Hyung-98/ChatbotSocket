@@ -1,0 +1,180 @@
+# Task ID: 8
+# Title: LLM API 연동 및 스트리밍 응답 구현
+# Status: pending
+# Dependencies: 2, 4
+# Priority: high
+# Description: OpenAI/Anthropic API를 연동하여 챗봇 응답을 스트리밍 방식으로 처리하는 기능 구현
+# Details:
+1. LLM API 클라이언트 구현 (OpenAI/Anthropic)
+2. 스트리밍 응답 처리 로직 구현
+3. 컨텍스트 관리 (대화 기록 유지)
+4. 에러 처리 및 재시도 로직
+5. 토큰 사용량 추적
+
+```typescript
+// backend/src/llm/llm.service.ts
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import OpenAI from 'openai';
+import { ChatCompletionChunk } from 'openai/resources';
+
+@Injectable()
+export class LlmService {
+  private readonly openai: OpenAI;
+  private readonly logger = new Logger(LlmService.name);
+  
+  constructor(private configService: ConfigService) {
+    this.openai = new OpenAI({
+      apiKey: this.configService.get<string>('OPENAI_API_KEY'),
+    });
+  }
+  
+  async generateChatResponse(messages: Array<{ role: string; content: string }>, callbacks: {
+    onToken: (token: string) => void;
+    onComplete: (fullResponse: string) => void;
+    onError: (error: Error) => void;
+  }) {
+    try {
+      const stream = await this.openai.chat.completions.create({
+        model: 'gpt-4',
+        messages,
+        stream: true,
+        max_tokens: 1000,
+      });
+      
+      let fullResponse = '';
+      
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          fullResponse += content;
+          callbacks.onToken(content);
+        }
+      }
+      
+      callbacks.onComplete(fullResponse);
+      return fullResponse;
+    } catch (error) {
+      this.logger.error(`LLM API error: ${error.message}`);
+      callbacks.onError(error);
+      throw error;
+    }
+  }
+  
+  // 컨텍스트 관리를 위한 메서드
+  prepareMessages(userMessage: string, chatHistory: Array<{ role: string; content: string }>) {
+    // 시스템 프롬프트 추가
+    const messages = [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      ...chatHistory,
+      { role: 'user', content: userMessage },
+    ];
+    
+    // 토큰 제한을 고려하여 필요시 이전 메시지 제거
+    return this.truncateMessages(messages);
+  }
+  
+  private truncateMessages(messages: Array<{ role: string; content: string }>) {
+    // 간단한 구현: 최근 10개 메시지만 유지
+    if (messages.length > 11) { // 시스템 메시지 + 최근 10개
+      return [messages[0], ...messages.slice(-10)];
+    }
+    return messages;
+  }
+}
+```
+
+```typescript
+// backend/src/chat/chat.gateway.ts (추가)
+import { LlmService } from '../llm/llm.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+@WebSocketGateway()
+export class ChatGateway {
+  // 기존 코드...
+  
+  constructor(
+    private authService: AuthService,
+    private llmService: LlmService,
+    private prismaService: PrismaService,
+  ) {}
+  
+  @SubscribeMessage('send')
+  async handleMessage(client: Socket, payload: { roomId: string, text: string }) {
+    const user = client.data.user;
+    
+    // 사용자 메시지 저장
+    const userMessage = await this.prismaService.message.create({
+      data: {
+        content: payload.text,
+        role: 'user',
+        roomId: payload.roomId,
+        userId: user.id,
+      },
+    });
+    
+    // 클라이언트에 메시지 브로드캐스트
+    this.server.to(payload.roomId).emit('message', {
+      userId: user.id,
+      text: payload.text,
+      ts: userMessage.createdAt.toISOString(),
+    });
+    
+    // 대화 기록 조회
+    const chatHistory = await this.prismaService.message.findMany({
+      where: { roomId: payload.roomId },
+      orderBy: { createdAt: 'asc' },
+      take: 10,
+    });
+    
+    // LLM 메시지 형식으로 변환
+    const messages = chatHistory.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+    
+    // 스트리밍 시작 알림
+    this.server.to(payload.roomId).emit('stream', { start: true });
+    
+    // LLM 응답 생성
+    try {
+      await this.llmService.generateChatResponse(
+        this.llmService.prepareMessages(payload.text, messages),
+        {
+          onToken: (token) => {
+            this.server.to(payload.roomId).emit('stream', { token });
+          },
+          onComplete: async (fullResponse) => {
+            // 봇 응답 저장
+            await this.prismaService.message.create({
+              data: {
+                content: fullResponse,
+                role: 'bot',
+                roomId: payload.roomId,
+              },
+            });
+            
+            // 스트리밍 종료 알림
+            this.server.to(payload.roomId).emit('stream', { end: true });
+          },
+          onError: (error) => {
+            this.server.to(payload.roomId).emit('error', { message: 'Failed to generate response' });
+            this.server.to(payload.roomId).emit('stream', { end: true });
+          },
+        },
+      );
+    } catch (error) {
+      console.error('LLM error:', error);
+    }
+    
+    return { event: 'sent', data: payload };
+  }
+}
+```
+
+# Test Strategy:
+1. LLM API 연결 및 응답 테스트
+2. 스트리밍 처리 테스트
+3. 에러 처리 및 재시도 로직 테스트
+4. 컨텍스트 관리 테스트 (대화 기록 유지)
+5. 토큰 사용량 추적 테스트

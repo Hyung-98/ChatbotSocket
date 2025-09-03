@@ -1,0 +1,155 @@
+# Task ID: 13
+# Title: 모니터링 및 로깅 시스템 구현
+# Status: pending
+# Dependencies: 1, 4, 8
+# Priority: low
+# Description: OpenTelemetry, Prometheus, Grafana를 활용한 모니터링 및 로깅 시스템 구현
+# Details:
+1. OpenTelemetry 설정 및 통합
+2. Prometheus 메트릭 수집 엔드포인트 구현
+3. Grafana 대시보드 구성
+4. 로그 수집 및 분석 시스템 구현
+5. 알림 설정
+
+```typescript
+// backend/src/telemetry/telemetry.module.ts
+import { Module } from '@nestjs/common';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { TelemetryService } from './telemetry.service';
+import { OpenTelemetryModule } from 'nestjs-otel';
+
+@Module({
+  imports: [
+    PrometheusModule.register({
+      defaultMetrics: {
+        enabled: true,
+      },
+    }),
+    OpenTelemetryModule.forRoot({
+      metrics: {
+        hostMetrics: true,
+        apiMetrics: {
+          enable: true,
+        },
+      },
+    }),
+  ],
+  providers: [TelemetryService],
+  exports: [TelemetryService],
+})
+export class TelemetryModule {}
+```
+
+```typescript
+// backend/src/telemetry/telemetry.service.ts
+import { Injectable } from '@nestjs/common';
+import { Counter, Gauge, Histogram } from '@willsoto/nestjs-prometheus';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+
+@Injectable()
+export class TelemetryService {
+  constructor(
+    @InjectMetric('socket_connections')
+    private socketConnectionsGauge: Gauge,
+    
+    @InjectMetric('message_count')
+    private messageCounter: Counter,
+    
+    @InjectMetric('llm_response_time')
+    private llmResponseTimeHistogram: Histogram,
+    
+    @InjectMetric('llm_token_usage')
+    private llmTokenUsageCounter: Counter,
+  ) {}
+
+  recordSocketConnection(delta: number): void {
+    this.socketConnectionsGauge.inc(delta);
+  }
+
+  recordMessage(role: string): void {
+    this.messageCounter.inc({ role });
+  }
+
+  recordLlmResponseTime(durationMs: number): void {
+    this.llmResponseTimeHistogram.observe(durationMs / 1000); // 초 단위로 변환
+  }
+
+  recordTokenUsage(type: 'prompt' | 'completion', count: number): void {
+    this.llmTokenUsageCounter.inc({ type }, count);
+  }
+}
+```
+
+```typescript
+// backend/src/main.ts (수정)
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { Logger } from 'nestjs-pino';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+  
+  app.useLogger(app.get(Logger));
+  
+  // CORS 설정
+  app.enableCors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  });
+  
+  await app.listen(3000);
+}
+bootstrap();
+```
+
+```yaml
+# docker-compose.yml (추가)
+version: '3.8'
+services:
+  # 기존 서비스...
+  
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+  
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  # 기존 볼륨...
+  grafana_data:
+```
+
+```yaml
+# prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'nestjs'
+    static_configs:
+      - targets: ['backend:3000']
+```
+
+# Test Strategy:
+1. 메트릭 수집 및 보고 테스트
+2. Prometheus 엔드포인트 응답 테스트
+3. Grafana 대시보드 연결 테스트
+4. 로그 수집 및 포맷 테스트
+5. 알림 트리거 테스트
