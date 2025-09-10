@@ -1,8 +1,27 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Light mode colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  --border-primary: #e2e8f0;
+  --border-secondary: #cbd5e1;
+  --accent-primary: #3b82f6;
+  --accent-secondary: #6366f1;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --shadow: rgba(0, 0, 0, 0.1);
+  --shadow-lg: rgba(0, 0, 0, 0.15);
 }
 
 @theme inline {
@@ -12,10 +31,48 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Dark mode */
+[data-theme='dark'] {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+
+  --bg-primary: #1e293b;
+  --bg-secondary: #334155;
+  --bg-tertiary: #475569;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --border-primary: #475569;
+  --border-secondary: #64748b;
+  --accent-primary: #60a5fa;
+  --accent-secondary: #818cf8;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --error: #f87171;
+  --shadow: rgba(0, 0, 0, 0.3);
+  --shadow-lg: rgba(0, 0, 0, 0.4);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme='light']) {
+    --background: #0f172a;
+    --foreground: #f1f5f9;
+
+    --bg-primary: #1e293b;
+    --bg-secondary: #334155;
+    --bg-tertiary: #475569;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+    --border-primary: #475569;
+    --border-secondary: #64748b;
+    --accent-primary: #60a5fa;
+    --accent-secondary: #818cf8;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --error: #f87171;
+    --shadow: rgba(0, 0, 0, 0.3);
+    --shadow-lg: rgba(0, 0, 0, 0.4);
   }
 }
 
@@ -23,4 +80,274 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* 채팅 애니메이션 */
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes bounce {
+  0%,
+  20%,
+  53%,
+  80%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  40%,
+  43% {
+    transform: translate3d(0, -8px, 0);
+  }
+  70% {
+    transform: translate3d(0, -4px, 0);
+  }
+  90% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+/* 메시지 애니메이션 클래스 */
+.message-enter {
+  animation: slideInFromRight 0.3s ease-out;
+}
+
+.message-enter-own {
+  animation: slideInFromLeft 0.3s ease-out;
+}
+
+.message-system {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* 호버 효과 */
+.hover-lift {
+  transition:
+    transform 0.2s ease-in-out,
+    box-shadow 0.2s ease-in-out;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* 버튼 애니메이션 */
+.btn-pulse {
+  animation: pulse 2s infinite;
+}
+
+.btn-bounce {
+  animation: bounce 1s;
+}
+
+/* 스크롤바 스타일링 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 그라데이션 텍스트 */
+.gradient-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 글래스모피즘 효과 */
+.glass {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* 부드러운 전환 */
+.smooth-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 포커스 링 */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+}
+
+/* 다크모드 전환 애니메이션 */
+* {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+/* 테마 토글 애니메이션 */
+.theme-toggle-button {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-toggle-button:hover {
+  transform: translateY(-1px);
+}
+
+.theme-toggle-button:active {
+  transform: translateY(0);
+}
+
+/* 테마 전환 시 페이지 페이드 효과 */
+.theme-transition {
+  transition: opacity 0.2s ease-in-out;
+}
+
+.theme-transition.theme-changing {
+  opacity: 0.8;
+}
+
+/* 다크모드 전용 스타일 */
+[data-theme='dark'] .glass {
+  background: rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+[data-theme='dark'] .gradient-text {
+  background: linear-gradient(135deg, #60a5fa 0%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 다크모드 스크롤바 */
+[data-theme='dark'] .custom-scrollbar::-webkit-scrollbar-track {
+  background: #334155;
+}
+
+[data-theme='dark'] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #64748b;
+}
+
+[data-theme='dark'] .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 다크모드 메시지 버블 */
+[data-theme='dark'] .message-bubble-own {
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+}
+
+[data-theme='dark'] .message-bubble-other {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .message-bubble-system {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+/* AI 응답 스타일링 */
+.ai-response {
+  line-height: 1.7;
+  word-spacing: 0.05em;
+  letter-spacing: 0.01em;
+}
+
+.ai-response div {
+  margin-bottom: 0.5rem;
+}
+
+.ai-response div:last-child {
+  margin-bottom: 0;
+}
+
+/* AI 응답의 문단 간격 */
+.ai-response div + div {
+  margin-top: 0.75rem;
+}
+
+/* 다크모드 AI 응답 */
+[data-theme='dark'] .ai-response {
+  color: #e2e8f0;
+}
+
+/* 다크모드 상태 표시 */
+[data-theme='dark'] .status-online {
+  background: var(--success);
+}
+
+[data-theme='dark'] .status-offline {
+  background: var(--error);
+}
+
+[data-theme='dark'] .status-connected {
+  background: var(--success);
+  color: #1e293b;
+}
+
+[data-theme='dark'] .status-disconnected {
+  background: var(--error);
+  color: #1e293b;
+}
+
+[data-theme='dark'] .status-joined {
+  background: var(--accent-primary);
+  color: #1e293b;
+}
+
+[data-theme='dark'] .status-not-joined {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }

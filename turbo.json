@@ -6,7 +6,9 @@
     "JWT_SECRET",
     "FRONTEND_URL",
     "NEXTAUTH_SECRET",
-    "NEXT_PUBLIC_API_URL"
+    "NEXT_PUBLIC_API_URL",
+    "REDIS_URL",
+    "OPENAI_API_KEY"
   ],
   "tasks": {
     "build": {
@@ -19,6 +21,9 @@
     },
     "lint": {
       "dependsOn": ["^lint"]
+    },
+    "lint:fix": {
+      "dependsOn": ["^lint:fix"]
     },
     "test": {
       "dependsOn": ["^build"],

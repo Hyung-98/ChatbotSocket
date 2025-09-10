@@ -13,7 +13,7 @@ export interface Message {
     id: string;
     roomId: string;
     userId?: string;
-    role: "user" | "bot";
+    role: 'user' | 'bot';
     content: string;
     createdAt: Date;
 }

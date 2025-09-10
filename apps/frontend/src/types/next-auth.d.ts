@@ -1,4 +1,6 @@
-import NextAuth from 'next-auth';
+// NextAuth v5 타입 확장
+
+import { DefaultSession } from 'next-auth';
 
 declare module 'next-auth' {
   interface Session {
@@ -6,7 +8,7 @@ declare module 'next-auth' {
       id: string;
       email: string;
       name: string;
-    };
+    } & DefaultSession['user'];
     accessToken: string;
   }
 

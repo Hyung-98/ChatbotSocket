@@ -1,23 +1,31 @@
-import { OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
+import { OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
+import { RedisService } from '../redis/redis.service';
+import { LlmService } from '../llm/llm.service';
+import { PrismaService } from '../prisma/prisma.service';
 import type { UserWithoutPassword } from '../auth/types/user.types';
 interface AuthenticatedSocket extends Socket {
     data: {
         user: UserWithoutPassword;
     };
 }
-export declare class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export declare class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
     private authService;
     private jwtService;
+    private redisService;
+    private llmService;
+    private prismaService;
     server: Server;
-    constructor(authService: AuthService, jwtService: JwtService);
+    constructor(authService: AuthService, jwtService: JwtService, redisService: RedisService, llmService: LlmService, prismaService: PrismaService);
+    afterInit(server: Server): Promise<void>;
     handleConnection(client: AuthenticatedSocket): Promise<void>;
     handleDisconnect(client: AuthenticatedSocket): void;
+    private ensureRoomExists;
     handleJoin(client: AuthenticatedSocket, payload: {
         roomId: string;
-    }): {
+    }): Promise<{
         event: string;
         data: {
             roomId: string;
@@ -28,12 +36,12 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
     } | {
         event: string;
         data: {
-            message: any;
+            message: string;
             roomId?: undefined;
             userId?: undefined;
             userName?: undefined;
         };
-    };
+    }>;
     handleLeave(client: AuthenticatedSocket, payload: {
         roomId: string;
     }): {
@@ -47,7 +55,7 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
     } | {
         event: string;
         data: {
-            message: any;
+            message: string;
             roomId?: undefined;
             userId?: undefined;
             userName?: undefined;
@@ -67,7 +75,7 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
     } | {
         event: string;
         data: {
-            message: any;
+            message: string;
             messageId?: undefined;
             roomId?: undefined;
             text?: undefined;
@@ -86,7 +94,7 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
     } | {
         event: string;
         data: {
-            message: any;
+            message: string;
             roomId?: undefined;
             isTyping?: undefined;
         };
@@ -101,7 +109,7 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
     } | {
         event: string;
         data: {
-            message: any;
+            message: string;
             rooms?: undefined;
             userId?: undefined;
         };
