@@ -17,6 +17,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<UserWithoutPassword> {
+    // 토큰이 블랙리스트에 있는지 확인
+    const isBlacklisted = await this.authService.isTokenBlacklisted(
+      (payload as any).jti || payload.sub, // jti (JWT ID) 또는 sub를 사용
+    );
+
+    if (isBlacklisted) {
+      throw new UnauthorizedException('토큰이 무효화되었습니다.');
+    }
+
     const user = await this.authService.validateUser(payload.sub);
 
     if (!user) {

@@ -15,9 +15,13 @@ export class JwtUtil {
   /**
    * JWT 토큰 생성
    */
-  static sign(payload: Omit<JwtPayload, 'iat' | 'exp'>): string {
+  static sign(
+    payload: Omit<JwtPayload, 'iat' | 'exp'>,
+    options?: jwt.SignOptions,
+  ): string {
     return jwt.sign(payload, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
+      ...options,
     } as jwt.SignOptions);
   }
 

@@ -46,13 +46,16 @@ exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const prisma_service_1 = require("../prisma/prisma.service");
+const redis_service_1 = require("../redis/redis.service");
 const bcrypt = __importStar(require("bcryptjs"));
 let AuthService = class AuthService {
     prisma;
     jwtService;
-    constructor(prisma, jwtService) {
+    redisService;
+    constructor(prisma, jwtService, redisService) {
         this.prisma = prisma;
         this.jwtService = jwtService;
+        this.redisService = redisService;
     }
     async register(registerDto) {
         const { email, password, name } = registerDto;
@@ -70,15 +73,16 @@ let AuthService = class AuthService {
                 password: hashedPassword,
             },
         });
-        const accessToken = this.jwtService.sign({
-            sub: user.id,
-            email: user.email,
-        });
+        const payload = { sub: user.id, email: user.email };
+        const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+        const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
         return {
             id: user.id,
             email: user.email,
             name: user.name,
+            role: user.role,
             accessToken,
+            refreshToken,
         };
     }
     async login(loginDto) {
@@ -93,15 +97,16 @@ let AuthService = class AuthService {
         if (!isPasswordValid) {
             throw new common_1.UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
         }
-        const accessToken = this.jwtService.sign({
-            sub: user.id,
-            email: user.email,
-        });
+        const payload = { sub: user.id, email: user.email };
+        const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+        const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
         return {
             id: user.id,
             email: user.email,
             name: user.name,
+            role: user.role,
             accessToken,
+            refreshToken,
         };
     }
     async validateUser(userId) {
@@ -115,9 +120,65 @@ let AuthService = class AuthService {
             id: user.id,
             email: user.email,
             name: user.name,
+            role: user.role,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
         };
+    }
+    async refreshToken(refreshToken) {
+        try {
+            const payload = this.jwtService.verify(refreshToken);
+            const user = await this.prisma.user.findUnique({
+                where: { id: payload.sub },
+            });
+            if (!user) {
+                throw new common_1.UnauthorizedException('Invalid refresh token');
+            }
+            const newPayload = { sub: user.id, email: user.email };
+            const newAccessToken = this.jwtService.sign(newPayload, {
+                expiresIn: '1h',
+            });
+            return { accessToken: newAccessToken };
+        }
+        catch {
+            throw new common_1.UnauthorizedException('Invalid refresh token');
+        }
+    }
+    async addToBlacklist(token, expiresIn) {
+        const redis = this.redisService.getClient();
+        if (redis) {
+            await redis.setEx(`blacklist:${token}`, expiresIn, 'true');
+        }
+    }
+    async isTokenBlacklisted(token) {
+        const redis = this.redisService.getClient();
+        if (!redis)
+            return false;
+        const result = await redis.get(`blacklist:${token}`);
+        return result === 'true';
+    }
+    async logout(accessToken, refreshToken) {
+        try {
+            const accessPayload = this.jwtService.decode(accessToken);
+            const refreshPayload = this.jwtService.decode(refreshToken);
+            if (accessPayload && accessPayload.exp) {
+                const now = Math.floor(Date.now() / 1000);
+                const expiresIn = accessPayload.exp - now;
+                if (expiresIn > 0) {
+                    await this.addToBlacklist(accessToken, expiresIn);
+                }
+            }
+            if (refreshPayload && refreshPayload.exp) {
+                const now = Math.floor(Date.now() / 1000);
+                const expiresIn = refreshPayload.exp - now;
+                if (expiresIn > 0) {
+                    await this.addToBlacklist(refreshToken, expiresIn);
+                }
+            }
+        }
+        catch (error) {
+            console.error('Error during logout:', error);
+        }
     }
     async getAllUsers() {
         const users = await this.prisma.user.findMany({
@@ -125,6 +186,7 @@ let AuthService = class AuthService {
                 id: true,
                 email: true,
                 name: true,
+                role: true,
                 createdAt: true,
                 updatedAt: true,
             },
@@ -136,6 +198,7 @@ exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        jwt_1.JwtService])
+        jwt_1.JwtService,
+        redis_service_1.RedisService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

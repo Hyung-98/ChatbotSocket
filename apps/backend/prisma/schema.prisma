@@ -14,17 +14,29 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   password  String
+  role      UserRole  @default(USER)
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
   messages  Message[]
+  tokenUsage TokenUsage[]
 
   @@map("users")
 }
 
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
 model Room {
-  id        String    @id @default(uuid())
-  name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  messages  Message[]
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  messages    Message[]
+  tokenUsage  TokenUsage[]
 
   @@map("rooms")
 }
@@ -42,4 +54,33 @@ model Message {
   user      User?                  @relation(fields: [userId], references: [id])
 
   @@map("messages")
+}
+
+model LogEntry {
+  id        String    @id @default(uuid())
+  level     String
+  message   String
+  context   String
+  metadata  String?
+  timestamp DateTime  @default(now())
+
+  @@map("log_entries")
+}
+
+model TokenUsage {
+  id              String    @id @default(uuid())
+  userId          String?
+  roomId          String?
+  provider        String    // 'openai', 'anthropic', etc.
+  model           String    // 'gpt-4', 'claude-3', etc.
+  promptTokens    Int
+  completionTokens Int
+  totalTokens     Int
+  estimatedCost   Float     // USD
+  requestId       String?   // For tracking specific requests
+  createdAt       DateTime  @default(now())
+  user            User?     @relation(fields: [userId], references: [id])
+  room            Room?     @relation(fields: [roomId], references: [id])
+
+  @@map("token_usage")
 }

@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken';
 export interface JwtPayload {
     sub: string;
     email: string;
@@ -5,7 +6,7 @@ export interface JwtPayload {
     exp?: number;
 }
 export declare class JwtUtil {
-    static sign(payload: Omit<JwtPayload, 'iat' | 'exp'>): string;
+    static sign(payload: Omit<JwtPayload, 'iat' | 'exp'>, options?: jwt.SignOptions): string;
     static verify(token: string): JwtPayload;
     static decode(token: string): JwtPayload | null;
     static isExpired(token: string): boolean;

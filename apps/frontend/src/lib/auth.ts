@@ -1,7 +1,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
       name: 'credentials',
@@ -18,7 +18,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           console.log('백엔드 로그인 API 호출:', { email: credentials.email });
 
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/login`, {
+          // 백엔드 URL 설정 (서버 사이드에서 안전하게)
+          const getBackendUrl = () => {
+            // 환경 변수에서 직접 가져오기
+            return process.env.BACKEND_URL || 'http://localhost:3001';
+          };
+
+          const response = await fetch(`${getBackendUrl()}/auth/login`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -38,15 +44,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
 
           const data = await response.json();
-          console.log('백엔드 로그인 성공:', { id: data.id, email: data.email, name: data.name });
+          console.log('백엔드 로그인 성공:', { id: data.id, email: data.email, name: data.name, role: data.role });
 
           if (data.accessToken) {
-            return {
+            const userData = {
               id: data.id,
               email: data.email,
               name: data.name,
+              role: data.role,
               accessToken: data.accessToken,
+              refreshToken: data.refreshToken,
             };
+            console.log('NextAuth에 전달할 사용자 데이터:', userData);
+            return userData;
           }
         } catch (error) {
           console.error('백엔드 로그인 오류:', error);
@@ -59,15 +69,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        console.log('JWT 콜백 - 사용자 데이터:', user);
         token.id = user.id;
+        token.role = user.role;
         token.accessToken = user.accessToken;
+        token.refreshToken = user.refreshToken;
+        console.log('JWT 콜백 - 토큰 데이터:', token);
       }
       return token;
     },
     async session({ session, token }) {
       if (token) {
+        console.log('세션 콜백 - 토큰 데이터:', token);
         session.user.id = token.id as string;
+        session.user.role = token.role as string;
         session.accessToken = token.accessToken as string;
+        session.refreshToken = token.refreshToken as string;
+        console.log('세션 콜백 - 최종 세션 데이터:', session);
       }
       return session;
     },
@@ -80,3 +98,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   secret: process.env.NEXTAUTH_SECRET,
 });
+
+export { handlers, auth, signIn, signOut };

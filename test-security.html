@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>보안 기능 테스트</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      .test-section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+      .success {
+        color: green;
+      }
+      .error {
+        color: red;
+      }
+      .info {
+        color: blue;
+      }
+      button {
+        margin: 5px;
+        padding: 10px;
+      }
+      input,
+      textarea {
+        margin: 5px;
+        padding: 5px;
+        width: 300px;
+      }
+      .result {
+        margin: 10px 0;
+        padding: 10px;
+        background: #f5f5f5;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔐 보안 기능 테스트</h1>
+
+    <!-- 1. JWT 토큰 테스트 -->
+    <div class="test-section">
+      <h2>1. JWT 토큰 갱신 테스트</h2>
+      <button onclick="testRegister()">사용자 등록</button>
+      <button onclick="testLogin()">로그인</button>
+      <button onclick="testRefreshToken()">토큰 갱신</button>
+      <div id="token-result" class="result"></div>
+    </div>
+
+    <!-- 2. Rate Limiting 테스트 -->
+    <div class="test-section">
+      <h2>2. Rate Limiting 테스트</h2>
+      <button onclick="testRateLimit()">빠른 요청 테스트 (100회)</button>
+      <div id="rate-limit-result" class="result"></div>
+    </div>
+
+    <!-- 3. 입력 검증 테스트 -->
+    <div class="test-section">
+      <h2>3. 입력 검증 테스트</h2>
+      <input
+        type="text"
+        id="test-message"
+        placeholder="테스트 메시지 (HTML 태그 포함 가능)"
+        value="<script>alert('xss')</script>안녕하세요!"
+      />
+      <button onclick="testInputValidation()">메시지 검증 테스트</button>
+      <div id="input-result" class="result"></div>
+    </div>
+
+    <!-- 4. 보안 헤더 확인 -->
+    <div class="test-section">
+      <h2>4. 보안 헤더 확인</h2>
+      <button onclick="checkSecurityHeaders()">보안 헤더 확인</button>
+      <div id="headers-result" class="result"></div>
+    </div>
+
+    <script>
+      let accessToken = '';
+      let refreshToken = '';
+
+      // 1. 사용자 등록
+      async function testRegister() {
+        const result = document.getElementById('token-result');
+        result.innerHTML = '<div class="info">등록 중...</div>';
+
+        try {
+          const response = await fetch('http://localhost:3001/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: 'test@example.com',
+              password: 'testpassword123',
+              name: 'Test User',
+            }),
+          });
+
+          const data = await response.json();
+          if (response.ok) {
+            accessToken = data.accessToken;
+            refreshToken = data.refreshToken;
+            result.innerHTML = `
+                        <div class="success">✅ 등록 성공!</div>
+                        <div>Access Token: ${accessToken.substring(0, 30)}...</div>
+                        <div>Refresh Token: ${refreshToken.substring(0, 30)}...</div>
+                    `;
+          } else {
+            result.innerHTML = `<div class="error">❌ 등록 실패: ${data.message || 'Unknown error'}</div>`;
+          }
+        } catch (error) {
+          result.innerHTML = `<div class="error">❌ 네트워크 오류: ${error.message}</div>`;
+        }
+      }
+
+      // 2. 로그인
+      async function testLogin() {
+        const result = document.getElementById('token-result');
+        result.innerHTML = '<div class="info">로그인 중...</div>';
+
+        try {
+          const response = await fetch('http://localhost:3001/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: 'test@example.com',
+              password: 'testpassword123',
+            }),
+          });
+
+          const data = await response.json();
+          if (response.ok) {
+            accessToken = data.accessToken;
+            refreshToken = data.refreshToken;
+            result.innerHTML = `
+                        <div class="success">✅ 로그인 성공!</div>
+                        <div>Access Token: ${accessToken.substring(0, 30)}...</div>
+                        <div>Refresh Token: ${refreshToken.substring(0, 30)}...</div>
+                    `;
+          } else {
+            result.innerHTML = `<div class="error">❌ 로그인 실패: ${data.message || 'Unknown error'}</div>`;
+          }
+        } catch (error) {
+          result.innerHTML = `<div class="error">❌ 네트워크 오류: ${error.message}</div>`;
+        }
+      }
+
+      // 3. 토큰 갱신
+      async function testRefreshToken() {
+        const result = document.getElementById('token-result');
+        if (!refreshToken) {
+          result.innerHTML = '<div class="error">❌ 먼저 로그인하세요</div>';
+          return;
+        }
+
+        result.innerHTML = '<div class="info">토큰 갱신 중...</div>';
+
+        try {
+          const response = await fetch('http://localhost:3001/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          });
+
+          const data = await response.json();
+          if (response.ok) {
+            accessToken = data.accessToken;
+            result.innerHTML = `
+                        <div class="success">✅ 토큰 갱신 성공!</div>
+                        <div>New Access Token: ${accessToken.substring(0, 30)}...</div>
+                    `;
+          } else {
+            result.innerHTML = `<div class="error">❌ 토큰 갱신 실패: ${data.message || 'Unknown error'}</div>`;
+          }
+        } catch (error) {
+          result.innerHTML = `<div class="error">❌ 네트워크 오류: ${error.message}</div>`;
+        }
+      }
+
+      // 4. Rate Limiting 테스트
+      async function testRateLimit() {
+        const result = document.getElementById('rate-limit-result');
+        result.innerHTML = '<div class="info">Rate Limiting 테스트 중... (100회 요청)</div>';
+
+        let successCount = 0;
+        let errorCount = 0;
+        const startTime = Date.now();
+
+        for (let i = 0; i < 100; i++) {
+          try {
+            const response = await fetch('http://localhost:3001/auth/profile', {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+
+            if (response.ok) {
+              successCount++;
+            } else if (response.status === 429) {
+              errorCount++;
+            }
+          } catch (error) {
+            errorCount++;
+          }
+
+          // 진행 상황 표시
+          if (i % 10 === 0) {
+            result.innerHTML = `<div class="info">진행 중... ${i}/100 (성공: ${successCount}, 실패: ${errorCount})</div>`;
+          }
+        }
+
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+
+        result.innerHTML = `
+                <div class="success">✅ Rate Limiting 테스트 완료!</div>
+                <div>총 요청: 100회</div>
+                <div>성공: ${successCount}회</div>
+                <div>실패: ${errorCount}회</div>
+                <div>소요 시간: ${duration}ms</div>
+                <div>평균 응답 시간: ${(duration / 100).toFixed(2)}ms</div>
+            `;
+      }
+
+      // 5. 입력 검증 테스트
+      async function testInputValidation() {
+        const result = document.getElementById('input-result');
+        const testMessage = document.getElementById('test-message').value;
+
+        result.innerHTML = '<div class="info">입력 검증 테스트 중...</div>';
+
+        try {
+          const response = await fetch('http://localhost:3001/rooms', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              name: testMessage,
+              description: '테스트용 룸입니다.',
+            }),
+          });
+
+          const data = await response.json();
+          if (response.ok) {
+            result.innerHTML = `
+                        <div class="success">✅ 입력 검증 통과!</div>
+                        <div>원본 메시지: ${testMessage}</div>
+                        <div>처리된 메시지: ${data.name || 'N/A'}</div>
+                    `;
+          } else {
+            result.innerHTML = `
+                        <div class="error">❌ 입력 검증 실패: ${data.message || 'Unknown error'}</div>
+                        <div>원본 메시지: ${testMessage}</div>
+                    `;
+          }
+        } catch (error) {
+          result.innerHTML = `<div class="error">❌ 네트워크 오류: ${error.message}</div>`;
+        }
+      }
+
+      // 6. 보안 헤더 확인
+      async function checkSecurityHeaders() {
+        const result = document.getElementById('headers-result');
+        result.innerHTML = '<div class="info">보안 헤더 확인 중...</div>';
+
+        try {
+          const response = await fetch('http://localhost:3001');
+          const headers = response.headers;
+
+          const securityHeaders = [
+            'x-content-type-options',
+            'x-frame-options',
+            'x-xss-protection',
+            'content-security-policy',
+            'strict-transport-security',
+          ];
+
+          let headerInfo = '<div class="success">✅ 보안 헤더 확인 완료!</div>';
+
+          securityHeaders.forEach((header) => {
+            const value = headers.get(header);
+            if (value) {
+              headerInfo += `<div class="success">${header}: ${value}</div>`;
+            } else {
+              headerInfo += `<div class="error">${header}: 없음</div>`;
+            }
+          });
+
+          result.innerHTML = headerInfo;
+        } catch (error) {
+          result.innerHTML = `<div class="error">❌ 네트워크 오류: ${error.message}</div>`;
+        }
+      }
+    </script>
+  </body>
+</html>

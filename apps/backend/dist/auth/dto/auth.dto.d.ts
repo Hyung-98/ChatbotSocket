@@ -11,5 +11,13 @@ export interface AuthResponse {
     id: string;
     email: string;
     name: string;
+    role: string;
+    accessToken: string;
+    refreshToken: string;
+}
+export interface RefreshTokenDto {
+    refreshToken: string;
+}
+export interface RefreshTokenResponse {
     accessToken: string;
 }

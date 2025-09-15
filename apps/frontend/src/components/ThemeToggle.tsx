@@ -47,9 +47,9 @@ export default function ThemeToggle() {
   };
 
   return (
-    <div className="relative group">
+    <div className="relative group !mr-0">
       {/* 툴팁 */}
-      <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+      <div className="absolute -bottom-7 left-1/2 transform -translate-x-1/2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
         {theme === 'light' && '라이트 모드'}
         {theme === 'dark' && '다크 모드'}
         {theme === 'system' && '시스템 설정'}

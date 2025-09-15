@@ -1,5 +1,13 @@
 @import 'tailwindcss';
 
+/* Line clamp utilities */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 :root {
@@ -350,4 +358,59 @@ body {
 [data-theme='dark'] .status-not-joined {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
+}
+
+/* 모바일 뷰포트 최적화 */
+@supports (height: 100dvh) {
+  .mobile-viewport {
+    height: 100dvh;
+  }
+}
+
+/* 모바일 키보드 대응 */
+@supports (height: 100svh) {
+  .mobile-viewport {
+    height: 100svh;
+  }
+}
+
+/* 모바일에서 입력 필드 포커스 시 스크롤 방지 */
+@media (max-width: 1024px) {
+  .mobile-input-fix {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+  }
+
+  .mobile-chat-container {
+    padding-bottom: env(keyboard-inset-height, 0px);
+  }
+}
+
+/* 모바일에서 스크롤 바운스 방지 */
+.mobile-scroll-fix {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 모바일에서 입력 필드 최적화 */
+@media (max-width: 1024px) {
+  input[type='text'] {
+    font-size: 16px; /* iOS 줌 방지 */
+    transform: translateZ(0); /* 하드웨어 가속 */
+  }
+
+  /* 모바일에서 버튼 터치 영역 확대 */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 모바일에서 스크롤 영역 최적화 */
+  .mobile-scroll-fix {
+    scroll-behavior: smooth;
+    scroll-padding-bottom: 20px;
+  }
 }

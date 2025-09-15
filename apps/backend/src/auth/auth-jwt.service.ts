@@ -38,16 +38,17 @@ export class AuthJwtService {
     });
 
     // jsonwebtoken을 사용한 JWT 토큰 생성
-    const accessToken = JwtUtil.sign({
-      sub: user.id,
-      email: user.email,
-    });
+    const payload = { sub: user.id, email: user.email };
+    const accessToken = JwtUtil.sign(payload, { expiresIn: '1h' });
+    const refreshToken = JwtUtil.sign(payload, { expiresIn: '7d' });
 
     return {
       id: user.id,
       email: user.email,
       name: user.name,
+      role: user.role,
       accessToken,
+      refreshToken,
     };
   }
 
@@ -74,16 +75,17 @@ export class AuthJwtService {
     }
 
     // jsonwebtoken을 사용한 JWT 토큰 생성
-    const accessToken = JwtUtil.sign({
-      sub: user.id,
-      email: user.email,
-    });
+    const payload = { sub: user.id, email: user.email };
+    const accessToken = JwtUtil.sign(payload, { expiresIn: '1h' });
+    const refreshToken = JwtUtil.sign(payload, { expiresIn: '7d' });
 
     return {
       id: user.id,
       email: user.email,
       name: user.name,
+      role: user.role,
       accessToken,
+      refreshToken,
     };
   }
 
@@ -100,6 +102,7 @@ export class AuthJwtService {
       id: user.id,
       email: user.email,
       name: user.name,
+      role: user.role,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

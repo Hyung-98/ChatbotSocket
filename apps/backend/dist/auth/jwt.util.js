@@ -8,9 +8,10 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 class JwtUtil {
-    static sign(payload) {
+    static sign(payload, options) {
         return jsonwebtoken_1.default.sign(payload, JWT_SECRET, {
             expiresIn: JWT_EXPIRES_IN,
+            ...options,
         });
     }
     static verify(token) {

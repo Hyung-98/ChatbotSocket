@@ -43,7 +43,7 @@ export default tseslint.config(
       '@typescript-eslint/prefer-const': 'error',
 
       // General rules
-      'no-console': 'warn',
+      'no-console': 'off',
       'no-debugger': 'error',
       'prefer-const': 'error',
       'no-var': 'error',

@@ -68,15 +68,16 @@ let AuthJwtService = class AuthJwtService {
                 password: hashedPassword,
             },
         });
-        const accessToken = jwt_util_1.JwtUtil.sign({
-            sub: user.id,
-            email: user.email,
-        });
+        const payload = { sub: user.id, email: user.email };
+        const accessToken = jwt_util_1.JwtUtil.sign(payload, { expiresIn: '1h' });
+        const refreshToken = jwt_util_1.JwtUtil.sign(payload, { expiresIn: '7d' });
         return {
             id: user.id,
             email: user.email,
             name: user.name,
+            role: user.role,
             accessToken,
+            refreshToken,
         };
     }
     async login(loginDto) {
@@ -91,15 +92,16 @@ let AuthJwtService = class AuthJwtService {
         if (!isPasswordValid) {
             throw new common_1.UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
         }
-        const accessToken = jwt_util_1.JwtUtil.sign({
-            sub: user.id,
-            email: user.email,
-        });
+        const payload = { sub: user.id, email: user.email };
+        const accessToken = jwt_util_1.JwtUtil.sign(payload, { expiresIn: '1h' });
+        const refreshToken = jwt_util_1.JwtUtil.sign(payload, { expiresIn: '7d' });
         return {
             id: user.id,
             email: user.email,
             name: user.name,
+            role: user.role,
             accessToken,
+            refreshToken,
         };
     }
     async validateUser(userId) {
@@ -113,6 +115,7 @@ let AuthJwtService = class AuthJwtService {
             id: user.id,
             email: user.email,
             name: user.name,
+            role: user.role,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
         };

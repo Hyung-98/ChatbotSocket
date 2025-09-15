@@ -9,18 +9,34 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatModule = void 0;
 const common_1 = require("@nestjs/common");
 const chat_gateway_1 = require("./chat.gateway");
+const user_connection_service_1 = require("./user-connection.service");
 const auth_module_1 = require("../auth/auth.module");
 const redis_module_1 = require("../redis/redis.module");
 const llm_module_1 = require("../llm/llm.module");
+const embedding_module_1 = require("../embedding/embedding.module");
+const telemetry_module_1 = require("../telemetry/telemetry.module");
 const prisma_service_1 = require("../prisma/prisma.service");
+const throttle_guard_1 = require("../common/guards/throttle.guard");
 let ChatModule = class ChatModule {
 };
 exports.ChatModule = ChatModule;
 exports.ChatModule = ChatModule = __decorate([
     (0, common_1.Module)({
-        imports: [auth_module_1.AuthModule, redis_module_1.RedisModule, llm_module_1.LlmModule],
-        providers: [chat_gateway_1.ChatGateway, prisma_service_1.PrismaService],
-        exports: [chat_gateway_1.ChatGateway],
+        imports: [
+            auth_module_1.AuthModule,
+            redis_module_1.RedisModule,
+            llm_module_1.LlmModule,
+            embedding_module_1.EmbeddingModule,
+            telemetry_module_1.TelemetryModule,
+        ],
+        providers: [
+            chat_gateway_1.ChatGateway,
+            user_connection_service_1.UserConnectionService,
+            prisma_service_1.PrismaService,
+            throttle_guard_1.MessageThrottlerGuard,
+            throttle_guard_1.TypingThrottlerGuard,
+        ],
+        exports: [chat_gateway_1.ChatGateway, user_connection_service_1.UserConnectionService],
     })
 ], ChatModule);
 //# sourceMappingURL=chat.module.js.map

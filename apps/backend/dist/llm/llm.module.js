@@ -10,11 +10,13 @@ exports.LlmModule = void 0;
 const common_1 = require("@nestjs/common");
 const llm_service_1 = require("./llm.service");
 const prisma_service_1 = require("../prisma/prisma.service");
+const embedding_module_1 = require("../embedding/embedding.module");
 let LlmModule = class LlmModule {
 };
 exports.LlmModule = LlmModule;
 exports.LlmModule = LlmModule = __decorate([
     (0, common_1.Module)({
+        imports: [embedding_module_1.EmbeddingModule],
         providers: [llm_service_1.LlmService, prisma_service_1.PrismaService],
         exports: [llm_service_1.LlmService],
     })

@@ -14,6 +14,8 @@ const auth_service_1 = require("./auth.service");
 const auth_controller_1 = require("./auth.controller");
 const jwt_strategy_1 = require("./jwt.strategy");
 const prisma_service_1 = require("../prisma/prisma.service");
+const redis_service_1 = require("../redis/redis.service");
+const csrf_middleware_1 = require("../common/middleware/csrf.middleware");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -24,12 +26,18 @@ exports.AuthModule = AuthModule = __decorate([
             jwt_1.JwtModule.register({
                 secret: process.env.JWT_SECRET ||
                     'your-super-secret-jwt-key-change-in-production',
-                signOptions: { expiresIn: '30d' },
+                signOptions: { expiresIn: '1h' },
             }),
         ],
         controllers: [auth_controller_1.AuthController],
-        providers: [auth_service_1.AuthService, jwt_strategy_1.JwtStrategy, prisma_service_1.PrismaService],
-        exports: [auth_service_1.AuthService, jwt_1.JwtModule],
+        providers: [
+            auth_service_1.AuthService,
+            jwt_strategy_1.JwtStrategy,
+            prisma_service_1.PrismaService,
+            redis_service_1.RedisService,
+            csrf_middleware_1.CsrfTokenGenerator,
+        ],
+        exports: [auth_service_1.AuthService, jwt_1.JwtModule, csrf_middleware_1.CsrfTokenGenerator],
     })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map

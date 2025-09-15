@@ -8,14 +8,27 @@ import {
   ConnectedSocket,
   OnGatewayInit,
 } from '@nestjs/websockets';
+import { UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
-import { UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service';
 import { LlmService } from '../llm/llm.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmbeddingService } from '../embedding/embedding.service';
+import { UserConnectionService } from './user-connection.service';
+import { TelemetryService } from '../telemetry/telemetry.service';
+import {
+  MessageThrottlerGuard,
+  TypingThrottlerGuard,
+  SpamThrottlerGuard,
+  RoomThrottlerGuard,
+  LongMessageThrottlerGuard,
+} from '../common/guards/throttle.guard';
+import { SendMessageDto, TypingDto } from '../common/dto/message.dto';
+import { SanitizerUtil } from '../common/utils/sanitizer.util';
 import type { UserWithoutPassword } from '../auth/types/user.types';
 
 interface AuthenticatedSocket extends Socket {
@@ -26,8 +39,20 @@ interface AuthenticatedSocket extends Socket {
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: [
+      process.env.FRONTEND_URL || 'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+      // 모바일 개발 환경 지원
+      /^http:\/\/192\.168\.\d+\.\d+:3000$/, // 로컬 네트워크 IP
+      /^http:\/\/192\.168\.\d+\.\d+:3001$/, // 로컬 네트워크 IP
+      /^http:\/\/10\.\d+\.\d+\.\d+:3000$/, // 사설 IP 대역
+      /^http:\/\/10\.\d+\.\d+\.\d+:3001$/, // 사설 IP 대역
+    ],
     credentials: true,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   },
   namespace: '/chat',
 })
@@ -42,6 +67,9 @@ export class ChatGateway
     private redisService: RedisService,
     private llmService: LlmService,
     private prismaService: PrismaService,
+    private embeddingService: EmbeddingService,
+    private userConnectionService: UserConnectionService,
+    private telemetryService: TelemetryService,
   ) {
     // JWT 설정 확인
     console.log('JWT Secret configured:', !!process.env.JWT_SECRET);
@@ -106,6 +134,15 @@ export class ChatGateway
           sub: payload.sub,
           email: payload.email,
         });
+
+        // 토큰이 블랙리스트에 있는지 확인
+        const isBlacklisted = await this.authService.isTokenBlacklisted(token);
+        if (isBlacklisted) {
+          console.error('Token is blacklisted');
+          client.emit('error', { message: '토큰이 무효화되었습니다.' });
+          client.disconnect();
+          return;
+        }
       } catch (jwtError) {
         console.error('JWT verification failed:', jwtError);
         client.emit('error', { message: '유효하지 않은 토큰입니다.' });
@@ -129,10 +166,40 @@ export class ChatGateway
       // 사용자 정보를 소켓에 저장
       client.data.user = user;
 
+      // 사용자 연결 관리에 추가 (연결 제한 검사)
+      const userAgent = client.handshake.headers['user-agent'] as string;
+      const connectionAdded = this.userConnectionService.addConnection(
+        user.id,
+        client,
+        userAgent,
+      );
+
+      if (!connectionAdded) {
+        console.error(`User ${user.id} exceeded maximum connections`);
+        client.emit('error', {
+          message: `최대 연결 수(${this.userConnectionService.getMaxConnectionsPerUser()})를 초과했습니다.`,
+          code: 'MAX_CONNECTIONS_EXCEEDED',
+        });
+        client.disconnect();
+        return;
+      }
+
       // 사용자를 개인 룸에 조인 (개인 메시지용)
       void client.join(`user:${user.id}`);
 
-      console.log(`Client connected: ${user.id} (${user.name})`);
+      // 사용자가 참여 중인 룸 목록 조회 및 자동 참여
+      const userRooms = await this.getUserRooms(user.id);
+      userRooms.forEach((roomId) => {
+        void client.join(`room:${roomId}`);
+      });
+
+      // 메트릭 기록
+      this.telemetryService.recordSocketConnection(1);
+      this.telemetryService.recordUserSessions(1, 'active');
+
+      console.log(
+        `Client connected: ${user.id} (${user.name}) - Device: ${userAgent}`,
+      );
 
       // 연결 성공 이벤트 전송
       client.emit('connected', {
@@ -142,6 +209,19 @@ export class ChatGateway
           name: user.name,
           email: user.email,
         },
+        deviceCount: this.userConnectionService.getUserConnectionCount(user.id),
+        maxConnections: this.userConnectionService.getMaxConnectionsPerUser(),
+        remainingConnections:
+          this.userConnectionService.getRemainingConnections(user.id),
+        autoJoinedRooms: userRooms,
+      });
+
+      // 사용자 상태 브로드캐스트 (다른 사용자들에게)
+      this.server.emit('user_status', {
+        userId: user.id,
+        userName: user.name,
+        status: 'online',
+        deviceCount: this.userConnectionService.getUserConnectionCount(user.id),
       });
     } catch (error) {
       console.error('Connection error:', error);
@@ -153,12 +233,43 @@ export class ChatGateway
   }
 
   handleDisconnect(client: AuthenticatedSocket) {
-    if (client.data?.user) {
+    const userId = this.userConnectionService.getUserId(client.id);
+
+    if (userId) {
+      // 사용자 연결 제거
+      const wasLastConnection =
+        this.userConnectionService.removeConnection(client);
+
+      // 메트릭 기록
+      this.telemetryService.recordSocketConnection(-1);
+      if (wasLastConnection) {
+        this.telemetryService.recordUserSessions(-1, 'active');
+      }
+
       console.log(
-        `Client disconnected: ${client.data.user.id} (${client.data.user.name})`,
+        `Client disconnected: ${userId} (${client.data?.user?.name || 'Unknown'})`,
       );
+
+      // 마지막 연결이 끊어진 경우에만 오프라인 상태 브로드캐스트
+      if (wasLastConnection) {
+        this.server.emit('user_status', {
+          userId,
+          userName: client.data?.user?.name || 'Unknown',
+          status: 'offline',
+          deviceCount: 0,
+        });
+      } else {
+        // 다른 디바이스가 여전히 연결되어 있는 경우 디바이스 수 업데이트
+        this.server.emit('user_status', {
+          userId,
+          userName: client.data?.user?.name || 'Unknown',
+          status: 'online',
+          deviceCount:
+            this.userConnectionService.getUserConnectionCount(userId),
+        });
+      }
     } else {
-      console.log(`Client disconnected: ${client.id}`);
+      console.log(`Client disconnected: ${client.id} (unauthenticated)`);
     }
   }
 
@@ -186,6 +297,7 @@ export class ChatGateway
     }
   }
 
+  @UseGuards(RoomThrottlerGuard)
   @SubscribeMessage('join')
   async handleJoin(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -236,6 +348,7 @@ export class ChatGateway
     }
   }
 
+  @UseGuards(RoomThrottlerGuard)
   @SubscribeMessage('leave')
   handleLeave(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -276,10 +389,11 @@ export class ChatGateway
     }
   }
 
+  @UseGuards(MessageThrottlerGuard, SpamThrottlerGuard)
   @SubscribeMessage('send')
   async handleMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: { roomId: string; text: string },
+    @MessageBody() payload: SendMessageDto,
   ) {
     try {
       const { roomId, text } = payload;
@@ -289,77 +403,180 @@ export class ChatGateway
         throw new UnauthorizedException('인증되지 않은 사용자입니다.');
       }
 
+      // 입력 검증 및 정화
       if (!text || text.trim().length === 0) {
-        throw new Error('메시지 내용을 입력해주세요.');
+        throw new BadRequestException('메시지 내용이 비어있습니다.');
       }
 
-      const trimmedText = text.trim();
+      // 메시지 정화 (XSS 방지)
+      const sanitizedText = SanitizerUtil.sanitizeMessage(text);
+
+      // 정화 후 빈 메시지인지 확인
+      if (sanitizedText.length === 0) {
+        throw new BadRequestException('유효하지 않은 메시지 내용입니다.');
+      }
+
+      // 입력 검증
+      const validation = SanitizerUtil.validateInput(sanitizedText, {
+        minLength: 1,
+        maxLength: 2000,
+        allowSpecialChars: true,
+      });
+
+      if (!validation.isValid) {
+        throw new BadRequestException(validation.error);
+      }
+
+      // 긴 메시지에 대한 추가 제한 (1500자 이상)
+      const longMessageThreshold = 1500;
+      if (sanitizedText.length >= longMessageThreshold) {
+        // 긴 메시지 전송 제한을 별도로 적용
+        const longMessageGuard = new LongMessageThrottlerGuard(
+          this.redisService,
+        );
+        const canSendLongMessage = await longMessageGuard.canActivate({
+          switchToWs: () => ({ getClient: () => client }),
+          getHandler: () => ({ name: 'send' }),
+        } as any);
+
+        if (!canSendLongMessage) {
+          throw new BadRequestException(
+            '긴 메시지 전송이 너무 빈번합니다. 잠시 후 다시 시도해주세요.',
+          );
+        }
+      }
+
+      if (!roomId || roomId.trim().length === 0) {
+        throw new BadRequestException('룸 ID가 필요합니다.');
+      }
+
+      // 룸 ID도 정화
+      const sanitizedRoomId = SanitizerUtil.sanitizeForSql(roomId.trim());
+
       console.log(
-        `Message from ${user.name} in room ${roomId}: ${trimmedText}`,
+        `Message from ${user.name} in room ${sanitizedRoomId}: ${sanitizedText}`,
       );
 
       // 사용자 메시지 저장
-      await this.llmService.saveMessage(roomId, trimmedText, 'user', user.id);
+      const userMessageId = await this.llmService.saveMessage(
+        sanitizedRoomId,
+        sanitizedText,
+        'user',
+        user.id,
+      );
 
-      // 사용자 메시지 객체 생성
+      // 사용자 메시지 임베딩 생성 및 저장 (백그라운드에서 처리)
+      this.embeddingService.processEmbeddingsInBackground([
+        {
+          id: userMessageId,
+          content: sanitizedText,
+        },
+      ]);
+
+      // 사용자 메시지 객체 생성 (데이터베이스 ID 사용)
       const userMessage = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: userMessageId, // 데이터베이스에서 생성된 실제 ID 사용
         userId: user.id,
         userName: user.name,
-        text: trimmedText,
-        roomId,
+        text: sanitizedText,
+        roomId: sanitizedRoomId,
         timestamp: new Date().toISOString(),
       };
 
       // 룸의 모든 사용자에게 사용자 메시지 전송
-      this.server.to(`room:${roomId}`).emit('message', userMessage);
+      this.server.to(`room:${sanitizedRoomId}`).emit('message', userMessage);
+
+      // 메트릭 기록
+      this.telemetryService.recordMessage('user', sanitizedRoomId);
 
       // 스트리밍 시작 알림
-      this.server.to(`room:${roomId}`).emit('stream', { start: true });
+      this.server.to(`room:${sanitizedRoomId}`).emit('stream', { start: true });
 
       try {
         // LLM 응답 생성
         const messages = await this.llmService.prepareMessages(
-          trimmedText,
-          roomId,
+          sanitizedText,
+          sanitizedRoomId,
         );
 
         await this.llmService.generateChatResponse(messages, {
           onToken: (token) => {
             // 각 토큰을 실시간으로 전송
-            this.server.to(`room:${roomId}`).emit('stream', { token });
+            this.server.to(`room:${sanitizedRoomId}`).emit('stream', { token });
           },
           onComplete: (fullResponse) => {
-            // 완전한 응답을 데이터베이스에 저장
+            // 완전한 응답을 데이터베이스에 저장 (비동기 처리)
             this.llmService
-              .saveMessage(roomId, fullResponse, 'assistant')
+              .saveMessage(sanitizedRoomId, fullResponse, 'assistant')
+              .then((assistantMessageId) => {
+                // 어시스턴트 메시지 임베딩 생성 및 저장 (백그라운드에서 처리)
+                this.embeddingService.processEmbeddingsInBackground([
+                  {
+                    id: assistantMessageId,
+                    content: fullResponse,
+                  },
+                ]);
+
+                // AI 응답을 메시지로 전송 (중복 방지를 위해 데이터베이스 ID 사용)
+                const aiMessage = {
+                  id: assistantMessageId,
+                  userId: null,
+                  userName: 'AI Assistant',
+                  text: fullResponse,
+                  roomId: sanitizedRoomId,
+                  timestamp: new Date().toISOString(),
+                };
+                this.server
+                  .to(`room:${sanitizedRoomId}`)
+                  .emit('message', aiMessage);
+
+                // 메트릭 기록
+                this.telemetryService.recordMessage(
+                  'assistant',
+                  sanitizedRoomId,
+                );
+              })
               .catch((error) => {
                 console.error('Failed to save assistant message:', error);
               });
 
-            // 스트리밍 종료 알림 (AI 응답은 stream 이벤트로만 처리)
-            this.server.to(`room:${roomId}`).emit('stream', { end: true });
+            // 스트리밍 종료 알림
+            this.server
+              .to(`room:${sanitizedRoomId}`)
+              .emit('stream', { end: true });
           },
           onError: (error) => {
             console.error('LLM error:', error);
-            this.server.to(`room:${roomId}`).emit('error', {
-              message: 'AI 응답 생성 중 오류가 발생했습니다.',
+            const errorMessage =
+              error.message || 'AI 응답 생성 중 오류가 발생했습니다.';
+            this.server.to(`room:${sanitizedRoomId}`).emit('error', {
+              message: errorMessage,
             });
-            this.server.to(`room:${roomId}`).emit('stream', { end: true });
+            this.server
+              .to(`room:${sanitizedRoomId}`)
+              .emit('stream', { end: true });
           },
         });
       } catch (llmError) {
         console.error('LLM service error:', llmError);
-        this.server.to(`room:${roomId}`).emit('error', {
-          message: 'AI 서비스에 연결할 수 없습니다.',
+        const errorMessage =
+          llmError instanceof Error
+            ? llmError.message
+            : 'AI 서비스에 연결할 수 없습니다.';
+        this.server.to(`room:${sanitizedRoomId}`).emit('error', {
+          message: errorMessage,
         });
-        this.server.to(`room:${roomId}`).emit('stream', { end: true });
+        this.server.to(`room:${sanitizedRoomId}`).emit('stream', { end: true });
       }
 
       // 발신자에게 전송 확인
       return {
         event: 'sent',
-        data: { messageId: userMessage.id, roomId, text: userMessage.text },
+        data: {
+          messageId: userMessage.id,
+          roomId: sanitizedRoomId,
+          text: userMessage.text,
+        },
       };
     } catch (error) {
       const errorMessage =
@@ -371,14 +588,16 @@ export class ChatGateway
     }
   }
 
+  @UseGuards(TypingThrottlerGuard)
   @SubscribeMessage('typing')
   handleTyping(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: { roomId: string; isTyping: boolean },
+    @MessageBody() payload: TypingDto,
   ) {
     try {
-      const { roomId, isTyping } = payload;
+      const { roomId, status } = payload;
       const user = client.data.user;
+      const isTyping = status === 'start';
 
       if (!user) {
         throw new UnauthorizedException('인증되지 않은 사용자입니다.');
@@ -424,6 +643,189 @@ export class ChatGateway
       return {
         event: 'rooms',
         data: { rooms: userRooms, userId: user.id },
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : '알 수 없는 오류가 발생했습니다.';
+      client.emit('error', { message: errorMessage });
+      return { event: 'error', data: { message: errorMessage } };
+    }
+  }
+
+  /**
+   * 사용자가 참여 중인 룸 목록 조회
+   */
+  private async getUserRooms(userId: string): Promise<string[]> {
+    try {
+      const rooms = await this.prismaService.room.findMany({
+        where: {
+          messages: {
+            some: {
+              userId: userId,
+            },
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+      return rooms.map((room) => room.id);
+    } catch (error) {
+      console.error('Failed to get user rooms:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 디바이스 간 메시지 읽음 상태 동기화
+   */
+  @SubscribeMessage('sync_read')
+  handleSyncRead(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: { roomId: string; messageId: string },
+  ) {
+    try {
+      const user = client.data.user;
+
+      if (!user) {
+        throw new UnauthorizedException('인증되지 않은 사용자입니다.');
+      }
+
+      const { roomId, messageId } = payload;
+
+      // 같은 사용자의 다른 디바이스에 읽음 상태 동기화
+      this.userConnectionService.sendToUserExcept(
+        this.server,
+        user.id,
+        client.id,
+        'read_receipt',
+        {
+          roomId,
+          messageId,
+          userId: user.id,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      return {
+        event: 'read_synced',
+        data: { roomId, messageId },
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : '알 수 없는 오류가 발생했습니다.';
+      client.emit('error', { message: errorMessage });
+      return { event: 'error', data: { message: errorMessage } };
+    }
+  }
+
+  /**
+   * 디바이스 간 타이핑 상태 동기화
+   */
+  @SubscribeMessage('sync_typing')
+  handleSyncTyping(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: { roomId: string; isTyping: boolean },
+  ) {
+    try {
+      const user = client.data.user;
+
+      if (!user) {
+        throw new UnauthorizedException('인증되지 않은 사용자입니다.');
+      }
+
+      const { roomId, isTyping } = payload;
+
+      // 같은 사용자의 다른 디바이스에 타이핑 상태 동기화
+      this.userConnectionService.sendToUserExcept(
+        this.server,
+        user.id,
+        client.id,
+        'user_typing_sync',
+        {
+          roomId,
+          isTyping,
+          userId: user.id,
+          userName: user.name,
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      return {
+        event: 'typing_synced',
+        data: { roomId, isTyping },
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : '알 수 없는 오류가 발생했습니다.';
+      client.emit('error', { message: errorMessage });
+      return { event: 'error', data: { message: errorMessage } };
+    }
+  }
+
+  /**
+   * 사용자 디바이스 정보 조회
+   */
+  @SubscribeMessage('get_devices')
+  handleGetDevices(@ConnectedSocket() client: AuthenticatedSocket) {
+    try {
+      const user = client.data.user;
+
+      if (!user) {
+        throw new UnauthorizedException('인증되지 않은 사용자입니다.');
+      }
+
+      const devices = this.userConnectionService.getUserDevices(user.id);
+      const connectionCount = this.userConnectionService.getUserConnectionCount(
+        user.id,
+      );
+
+      return {
+        event: 'devices',
+        data: {
+          devices,
+          connectionCount,
+          userId: user.id,
+        },
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : '알 수 없는 오류가 발생했습니다.';
+      client.emit('error', { message: errorMessage });
+      return { event: 'error', data: { message: errorMessage } };
+    }
+  }
+
+  /**
+   * 연결 통계 조회 (관리자용)
+   */
+  @SubscribeMessage('get_connection_stats')
+  handleGetConnectionStats(@ConnectedSocket() client: AuthenticatedSocket) {
+    try {
+      const user = client.data.user;
+
+      if (!user) {
+        throw new UnauthorizedException('인증되지 않은 사용자입니다.');
+      }
+
+      const stats = this.userConnectionService.getConnectionStats();
+      const onlineUsers = this.userConnectionService.getOnlineUsers();
+
+      return {
+        event: 'connection_stats',
+        data: {
+          stats,
+          onlineUsers,
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       const errorMessage =

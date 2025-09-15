@@ -31,6 +31,42 @@
 $ npm install
 ```
 
+## Environment Variables
+
+Create a `.env` file in the `apps/backend` directory with the following variables:
+
+```bash
+# 개발 환경 변수
+NODE_ENV=development
+
+# 데이터베이스 설정
+POSTGRES_PASSWORD=postgres
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/chatbot?schema=public
+
+# Redis 설정
+REDIS_PASSWORD=
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# JWT 설정
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-development
+JWT_EXPIRES_IN=1h
+
+# AI API 키 (필수 - 실제 값으로 교체 필요)
+# Anthropic API 키를 https://console.anthropic.com/ 에서 발급받으세요
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+OPENAI_API_KEY=your-openai-api-key-here
+
+# NextAuth 설정
+NEXTAUTH_SECRET=your-nextauth-secret-change-this-in-development
+NEXTAUTH_URL=http://localhost:3000
+
+# 백엔드 URL
+NEXT_PUBLIC_BACKEND_URL=http://localhost:3001
+```
+
+**Important**: The `ANTHROPIC_API_KEY` is required for the AI chat functionality to work. Get your API key from [Anthropic Console](https://console.anthropic.com/).
+
 ## Compile and run the project
 
 ```bash

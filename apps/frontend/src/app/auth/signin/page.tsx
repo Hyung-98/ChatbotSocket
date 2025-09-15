@@ -35,7 +35,13 @@ export default function SignInPage() {
         console.log('로그인 실패:', result.error);
       } else if (result?.ok) {
         console.log('로그인 성공');
-        router.push('/chat');
+
+        // 관리자 사용자인 경우 관리자 페이지로 리다이렉트
+        if (email === 'admin@example.com') {
+          router.push('/admin');
+        } else {
+          router.push('/chat');
+        }
       }
     } catch (error) {
       console.error('로그인 오류:', error);
