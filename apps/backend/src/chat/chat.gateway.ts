@@ -286,9 +286,14 @@ export class ChatGateway
 
   private async ensureRoomExists(roomId: string): Promise<void> {
     try {
-      const existingRoom = await this.prismaService.room.findUnique({
+      const existingRoom = (await this.prismaService.room.findUnique({
         where: { id: roomId },
-      });
+      })) as {
+        id: string;
+        name: string;
+        description: string | null;
+        createdAt: Date;
+      } | null;
 
       if (!existingRoom) {
         // 방이 존재하지 않으면 생성
@@ -678,7 +683,7 @@ export class ChatGateway
    */
   private async getUserRooms(userId: string): Promise<string[]> {
     try {
-      const rooms = await this.prismaService.room.findMany({
+      const rooms = (await this.prismaService.room.findMany({
         where: {
           messages: {
             some: {
@@ -689,7 +694,7 @@ export class ChatGateway
         select: {
           id: true,
         },
-      });
+      })) as Array<{ id: string }>;
       return rooms.map((room) => room.id);
     } catch (error) {
       console.error('Failed to get user rooms:', error);

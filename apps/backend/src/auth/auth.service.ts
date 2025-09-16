@@ -22,9 +22,17 @@ export class AuthService {
     const { email, password, name } = registerDto;
 
     // 이메일 중복 확인
-    const existingUser = await this.prisma.user.findUnique({
+    const existingUser = (await this.prisma.user.findUnique({
       where: { email },
-    });
+    })) as {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+    } | null;
 
     if (existingUser) {
       throw new ConflictException('이미 존재하는 이메일입니다.');
@@ -34,13 +42,21 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // 사용자 생성
-    const user = await this.prisma.user.create({
+    const user = (await this.prisma.user.create({
       data: {
         email,
         name,
         password: hashedPassword,
       },
-    });
+    })) as {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+    };
 
     // JWT 토큰 생성
     const payload = { sub: user.id, email: user.email };
@@ -61,9 +77,18 @@ export class AuthService {
     const { email, password } = loginDto;
 
     // 사용자 찾기
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { email },
-    });
+    })) as {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+      password: string;
+    } | null;
 
     if (!user) {
       throw new UnauthorizedException(
@@ -95,9 +120,17 @@ export class AuthService {
   }
 
   async validateUser(userId: string): Promise<UserWithoutPassword | null> {
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { id: userId },
-    });
+    })) as {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+    } | null;
 
     if (!user) {
       return null;
@@ -117,9 +150,17 @@ export class AuthService {
   async refreshToken(refreshToken: string): Promise<{ accessToken: string }> {
     try {
       const payload = this.jwtService.verify(refreshToken);
-      const user = await this.prisma.user.findUnique({
+      const user = (await this.prisma.user.findUnique({
         where: { id: payload.sub },
-      });
+      })) as {
+        id: string;
+        email: string;
+        name: string;
+        role: string;
+        isActive: boolean;
+        lastLogin: Date | null;
+        createdAt: Date;
+      } | null;
 
       if (!user) {
         throw new UnauthorizedException('Invalid refresh token');
@@ -181,7 +222,7 @@ export class AuthService {
 
   // 개발용: 모든 사용자 조회 (보안상 프로덕션에서는 제거)
   async getAllUsers(): Promise<UserWithoutPassword[]> {
-    const users = await this.prisma.user.findMany({
+    const users = (await this.prisma.user.findMany({
       select: {
         id: true,
         email: true,
@@ -190,7 +231,14 @@ export class AuthService {
         createdAt: true,
         updatedAt: true,
       },
-    });
+    })) as Array<{
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
     return users;
   }
 }

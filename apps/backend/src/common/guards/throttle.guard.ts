@@ -16,7 +16,7 @@ export class SocketThrottlerGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const client = context.switchToWs().getClient();
-    const clientData = client.data as { user?: { id: string } } | undefined;
+    const clientData = client.data;
     const userId = clientData?.user?.id;
 
     if (!userId) return true; // 인증되지 않은 요청은 다른 가드에서 처리

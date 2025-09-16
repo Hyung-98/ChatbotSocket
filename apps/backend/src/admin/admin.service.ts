@@ -112,7 +112,7 @@ export class AdminService {
   }> {
     const skip = (page - 1) * limit;
 
-    const [users, total] = await Promise.all([
+    const [users, total] = (await Promise.all([
       this.prisma.user.findMany({
         skip,
         take: limit,
@@ -124,7 +124,19 @@ export class AdminService {
         },
       }),
       this.prisma.user.count(),
-    ]);
+    ])) as [
+      Array<{
+        id: string;
+        email: string;
+        name: string;
+        role: UserRole;
+        isActive: boolean;
+        lastLogin: Date | null;
+        createdAt: Date;
+        _count: { messages: number };
+      }>,
+      number,
+    ];
 
     const userStats: UserStats[] = users.map((user) => ({
       id: user.id,
@@ -156,7 +168,7 @@ export class AdminService {
   }> {
     const skip = (page - 1) * limit;
 
-    const [rooms, total] = await Promise.all([
+    const [rooms, total] = (await Promise.all([
       this.prisma.room.findMany({
         skip,
         take: limit,
@@ -173,7 +185,17 @@ export class AdminService {
         },
       }),
       this.prisma.room.count(),
-    ]);
+    ])) as [
+      Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        createdAt: Date;
+        _count: { messages: number };
+        messages: Array<{ createdAt: Date }>;
+      }>,
+      number,
+    ];
 
     const roomStats: RoomStats[] = rooms.map((room) => ({
       id: room.id,
@@ -193,7 +215,7 @@ export class AdminService {
   }
 
   async getRecentMessages(limit: number = 50): Promise<MessageStats[]> {
-    const messages = await this.prisma.message.findMany({
+    const messages = (await this.prisma.message.findMany({
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: {
@@ -204,7 +226,14 @@ export class AdminService {
           select: { name: true },
         },
       },
-    });
+    })) as Array<{
+      id: string;
+      content: string;
+      role: string;
+      createdAt: Date;
+      user: { name: string } | null;
+      room: { name: string };
+    }>;
 
     return messages.map((message) => ({
       id: message.id,
@@ -252,7 +281,7 @@ export class AdminService {
       };
     }
 
-    const [messages, total] = await Promise.all([
+    const [messages, total] = (await Promise.all([
       this.prisma.message.findMany({
         where,
         skip: options.skip,
@@ -275,7 +304,17 @@ export class AdminService {
         },
       }),
       this.prisma.message.count({ where }),
-    ]);
+    ])) as [
+      Array<{
+        id: string;
+        content: string;
+        role: string;
+        createdAt: Date;
+        user: { id: string; name: string; email: string } | null;
+        room: { id: string; name: string };
+      }>,
+      number,
+    ];
 
     return {
       messages: messages.map((message) => ({
@@ -294,7 +333,7 @@ export class AdminService {
   }
 
   async getConversationThread(roomId: string, limit: number = 100) {
-    const messages = await this.prisma.message.findMany({
+    const messages = (await this.prisma.message.findMany({
       where: { roomId },
       take: limit,
       orderBy: { createdAt: 'asc' },
@@ -313,7 +352,14 @@ export class AdminService {
           },
         },
       },
-    });
+    })) as Array<{
+      id: string;
+      content: string;
+      role: string;
+      createdAt: Date;
+      user: { id: string; name: string; email: string } | null;
+      room: { id: string; name: string };
+    }>;
 
     return messages.map((message) => ({
       id: message.id,
@@ -334,14 +380,23 @@ export class AdminService {
       this.logger.log(`사용자 역할 변경 시작: ${userId} -> ${role}`);
 
       // 1. 사용자 존재 여부 확인
-      const user = await this.prisma.user.findUnique({
+      const user = (await this.prisma.user.findUnique({
         where: { id: userId },
         include: {
           _count: {
             select: { messages: true },
           },
         },
-      });
+      })) as {
+        id: string;
+        name: string;
+        email: string;
+        role: UserRole;
+        isActive: boolean;
+        lastLogin: Date | null;
+        createdAt: Date;
+        _count: { messages: number };
+      } | null;
 
       if (!user) {
         throw new BadRequestException('사용자를 찾을 수 없습니다.');
@@ -359,7 +414,7 @@ export class AdminService {
       );
 
       // 4. 역할 업데이트
-      const updatedUser = await this.prisma.user.update({
+      const updatedUser = (await this.prisma.user.update({
         where: { id: userId },
         data: { role },
         include: {
@@ -367,7 +422,16 @@ export class AdminService {
             select: { messages: true },
           },
         },
-      });
+      })) as {
+        id: string;
+        name: string;
+        email: string;
+        role: UserRole;
+        isActive: boolean;
+        lastLogin: Date | null;
+        createdAt: Date;
+        _count: { messages: number };
+      };
 
       this.logger.log(
         `사용자 역할 변경 완료: ${updatedUser.name} (${updatedUser.email}) - ${role}`,
@@ -393,15 +457,23 @@ export class AdminService {
   }
 
   async toggleUserStatus(userId: string): Promise<UserStats> {
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { id: userId },
-    });
+    })) as {
+      id: string;
+      name: string;
+      email: string;
+      role: UserRole;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+    } | null;
 
     if (!user) {
       throw new Error('사용자를 찾을 수 없습니다.');
     }
 
-    const updatedUser = await this.prisma.user.update({
+    const updatedUser = (await this.prisma.user.update({
       where: { id: userId },
       data: { isActive: !user.isActive },
       include: {
@@ -409,7 +481,16 @@ export class AdminService {
           select: { messages: true },
         },
       },
-    });
+    })) as {
+      id: string;
+      name: string;
+      email: string;
+      role: UserRole;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+      _count: { messages: number };
+    };
 
     return {
       id: updatedUser.id,
@@ -428,14 +509,19 @@ export class AdminService {
       this.logger.log(`사용자 삭제 시작: ${userId}`);
 
       // 1. 사용자 존재 여부 확인
-      const user = await this.prisma.user.findUnique({
+      const user = (await this.prisma.user.findUnique({
         where: { id: userId },
         include: {
           _count: {
             select: { messages: true, tokenUsage: true },
           },
         },
-      });
+      })) as {
+        id: string;
+        name: string;
+        email: string;
+        _count: { messages: number; tokenUsage: number };
+      } | null;
 
       if (!user) {
         throw new BadRequestException('사용자를 찾을 수 없습니다.');
@@ -501,7 +587,7 @@ export class AdminService {
       isActive?: boolean;
     },
   ): Promise<UserStats> {
-    const user = await this.prisma.user.update({
+    const user = (await this.prisma.user.update({
       where: { id: userId },
       data: updateData,
       include: {
@@ -509,7 +595,16 @@ export class AdminService {
           select: { messages: true },
         },
       },
-    });
+    })) as {
+      id: string;
+      name: string;
+      email: string;
+      role: UserRole;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+      _count: { messages: number };
+    };
 
     return {
       id: user.id,
@@ -527,7 +622,7 @@ export class AdminService {
     roomId: string,
     updateData: { name?: string; description?: string },
   ): Promise<RoomStats> {
-    const room = await this.prisma.room.update({
+    const room = (await this.prisma.room.update({
       where: { id: roomId },
       data: updateData,
       include: {
@@ -539,7 +634,14 @@ export class AdminService {
           take: 1,
         },
       },
-    });
+    })) as {
+      id: string;
+      name: string;
+      description: string | null;
+      createdAt: Date;
+      _count: { messages: number };
+      messages: Array<{ createdAt: Date }>;
+    };
 
     return {
       id: room.id,
@@ -612,7 +714,7 @@ export class AdminService {
       const hashedPassword = await bcrypt.hash(userData.password, 10);
 
       // 사용자 생성
-      const newUser = await this.prisma.user.create({
+      const newUser = (await this.prisma.user.create({
         data: {
           name: userData.name,
           email: userData.email,
@@ -625,7 +727,16 @@ export class AdminService {
             select: { messages: true },
           },
         },
-      });
+      })) as {
+        id: string;
+        name: string;
+        email: string;
+        role: UserRole;
+        isActive: boolean;
+        lastLogin: Date | null;
+        createdAt: Date;
+        _count: { messages: number };
+      };
 
       // UserStats 형태로 변환하여 반환
       return {

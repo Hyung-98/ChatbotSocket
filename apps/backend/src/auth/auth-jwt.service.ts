@@ -17,9 +17,17 @@ export class AuthJwtService {
     const { email, password, name } = registerDto;
 
     // 이메일 중복 확인
-    const existingUser = await this.prisma.user.findUnique({
+    const existingUser = (await this.prisma.user.findUnique({
       where: { email },
-    });
+    })) as {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+    } | null;
 
     if (existingUser) {
       throw new ConflictException('이미 존재하는 이메일입니다.');
@@ -29,13 +37,21 @@ export class AuthJwtService {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // 사용자 생성
-    const user = await this.prisma.user.create({
+    const user = (await this.prisma.user.create({
       data: {
         email,
         name,
         password: hashedPassword,
       },
-    });
+    })) as {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+    };
 
     // jsonwebtoken을 사용한 JWT 토큰 생성
     const payload = { sub: user.id, email: user.email };
@@ -56,9 +72,18 @@ export class AuthJwtService {
     const { email, password } = loginDto;
 
     // 사용자 찾기
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { email },
-    });
+    })) as {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+      password: string;
+    } | null;
 
     if (!user) {
       throw new UnauthorizedException(
@@ -90,9 +115,17 @@ export class AuthJwtService {
   }
 
   async validateUser(userId: string): Promise<UserWithoutPassword | null> {
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { id: userId },
-    });
+    })) as {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      isActive: boolean;
+      lastLogin: Date | null;
+      createdAt: Date;
+    } | null;
 
     if (!user) {
       return null;
@@ -104,14 +137,14 @@ export class AuthJwtService {
       name: user.name,
       role: user.role,
       createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      updatedAt: user.updatedAt as Date,
     };
   }
 
   // JWT 토큰 검증
   async verifyToken(token: string): Promise<UserWithoutPassword | null> {
     try {
-      const payload = JwtUtil.verify(token);
+      const payload = JwtUtil.verify(token) as { sub: string };
       return this.validateUser(payload.sub);
     } catch {
       return null;

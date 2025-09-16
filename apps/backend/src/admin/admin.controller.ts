@@ -99,7 +99,16 @@ export class AdminController {
   async getConversationThread(
     @Param('roomId') roomId: string,
     @Query('limit') limit: string = '100',
-  ) {
+  ): Promise<
+    Array<{
+      id: string;
+      content: string;
+      role: string;
+      userName: string | null;
+      userEmail: string | null;
+      createdAt: Date;
+    }>
+  > {
     return this.adminService.getConversationThread(roomId, parseInt(limit));
   }
 
