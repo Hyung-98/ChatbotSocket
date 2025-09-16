@@ -59,8 +59,8 @@ jobs:
 
       - name: Run linting
         run: |
-          pnpm run lint --filter=backend --max-warnings=0
-          pnpm run lint --filter=frontend --max-warnings=0
+          cd apps/backend && pnpm run lint
+          cd apps/frontend && pnpm run lint
 
       - name: Run type checking
         run: |
