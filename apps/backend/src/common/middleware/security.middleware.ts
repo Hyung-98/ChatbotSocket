@@ -41,7 +41,7 @@ export class InputSanitizationMiddleware implements NestMiddleware {
     for (const key in obj) {
       if (typeof obj[key] === 'string') {
         // 기본적인 HTML 태그 제거
-        obj[key] = (obj[key] as string)
+        obj[key] = obj[key]
           .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
           .replace(/<[^>]*>/g, '')
           .trim();

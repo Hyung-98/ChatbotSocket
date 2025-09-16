@@ -7,6 +7,7 @@ import {
   MessageBody,
   ConnectedSocket,
   OnGatewayInit,
+  ExecutionContext,
 } from '@nestjs/websockets';
 import { UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
@@ -35,6 +36,14 @@ interface AuthenticatedSocket extends Socket {
   data: {
     user: UserWithoutPassword;
   };
+}
+
+interface MockExecutionContext extends ExecutionContext {
+  switchToWs: () => { getClient: () => AuthenticatedSocket };
+  getHandler: () => { name: string };
+  getClass: () => { name: string };
+  getArgs: () => unknown[];
+  getArgByIndex: (index: number) => unknown;
 }
 
 @WebSocketGateway({
@@ -434,7 +443,7 @@ export class ChatGateway
         const longMessageGuard = new LongMessageThrottlerGuard(
           this.redisService,
         );
-        const mockContext: ExecutionContext = {
+        const mockContext: Partial<MockExecutionContext> = {
           switchToWs: () => ({ getClient: () => client }),
           getHandler: () => ({ name: 'send' }),
           getClass: () => ({}),
@@ -444,9 +453,9 @@ export class ChatGateway
           switchToHttp: () => ({}),
           getType: () => 'ws',
         };
-        const canSendLongMessage =
-          await longMessageGuard.canActivate(mockContext);
-
+        const canSendLongMessage = await longMessageGuard.canActivate(
+          mockContext as MockExecutionContext,
+        );
         if (!canSendLongMessage) {
           throw new BadRequestException(
             '긴 메시지 전송이 너무 빈번합니다. 잠시 후 다시 시도해주세요.',
