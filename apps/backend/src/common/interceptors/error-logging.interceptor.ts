@@ -30,7 +30,7 @@ export class ErrorLoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const { method, url, body } = request;
-    const user = request.user;
+    const user = request.user as { id: string; email: string } | undefined;
 
     return next.handle().pipe(
       catchError((error: Error) => {

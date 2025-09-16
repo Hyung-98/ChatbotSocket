@@ -27,9 +27,10 @@ export class LoggingInterceptor implements NestInterceptor {
         const requestWithRoute = request as Request & {
           route?: { path?: string };
         };
+        const routePath = requestWithRoute.route?.path as string | undefined;
         this.telemetryService.recordRequestDuration(
           request.method,
-          requestWithRoute.route?.path || request.url,
+          routePath || request.url,
           response.statusCode.toString(),
           durationSeconds,
         );
