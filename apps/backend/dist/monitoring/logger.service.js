@@ -23,19 +23,19 @@ let CustomLoggerService = CustomLoggerService_1 = class CustomLoggerService {
         this.redis = redis;
     }
     log(message, context, metadata) {
-        this.writeLog('log', message, context, metadata);
+        void this.writeLog('log', message, context, metadata);
     }
     error(message, trace, context, metadata) {
-        this.writeLog('error', message, context, { ...metadata, trace });
+        void this.writeLog('error', message, context, { ...metadata, trace });
     }
     warn(message, context, metadata) {
-        this.writeLog('warn', message, context, metadata);
+        void this.writeLog('warn', message, context, metadata);
     }
     debug(message, context, metadata) {
-        this.writeLog('debug', message, context, metadata);
+        void this.writeLog('debug', message, context, metadata);
     }
     verbose(message, context, metadata) {
-        this.writeLog('verbose', message, context, metadata);
+        void this.writeLog('verbose', message, context, metadata);
     }
     async writeLog(level, message, context, metadata) {
         const logEntry = {

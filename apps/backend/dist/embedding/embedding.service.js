@@ -83,8 +83,9 @@ let EmbeddingService = EmbeddingService_1 = class EmbeddingService {
             return embedding;
         }
         catch (error) {
-            this.logger.error(`Failed to create embedding: ${error.message}`, error.stack);
-            throw new Error(`Embedding generation failed: ${error.message}`);
+            const errorObj = error;
+            this.logger.error(`Failed to create embedding: ${errorObj.message}`, errorObj.stack);
+            throw new Error(`Embedding generation failed: ${errorObj.message}`);
         }
     }
     hashText(text) {
@@ -97,7 +98,7 @@ let EmbeddingService = EmbeddingService_1 = class EmbeddingService {
         return Math.abs(hash).toString(36);
     }
     createHashBasedEmbedding(text) {
-        const embedding = new Array(1536).fill(0);
+        const embedding = Array.from({ length: 1536 }, () => 0);
         const words = text.toLowerCase().split(/\s+/);
         words.forEach((word, wordIndex) => {
             let hash = 0;
@@ -159,7 +160,8 @@ let EmbeddingService = EmbeddingService_1 = class EmbeddingService {
             this.logger.debug(`Successfully stored embedding for message ${messageId}`);
         }
         catch (error) {
-            this.logger.error(`Failed to store message embedding: ${error.message}`, error.stack);
+            const errorObj = error;
+            this.logger.error(`Failed to store message embedding: ${errorObj.message}`, errorObj.stack);
         }
     }
     async findSimilarMessages(content, roomId, limit = 5) {
@@ -185,7 +187,8 @@ let EmbeddingService = EmbeddingService_1 = class EmbeddingService {
             return similarMessages;
         }
         catch (error) {
-            this.logger.error(`Failed to find similar messages: ${error.message}`, error.stack);
+            const errorObj = error;
+            this.logger.error(`Failed to find similar messages: ${errorObj.message}`, errorObj.stack);
             return [];
         }
     }
@@ -210,7 +213,8 @@ let EmbeddingService = EmbeddingService_1 = class EmbeddingService {
             this.logger.debug(`Completed batch embedding storage`);
         }
         catch (error) {
-            this.logger.error(`Failed to batch store embeddings: ${error.message}`, error.stack);
+            const errorObj = error;
+            this.logger.error(`Failed to batch store embeddings: ${errorObj.message}`, errorObj.stack);
         }
     }
     processEmbeddingsInBackground(messages) {
@@ -251,7 +255,8 @@ let EmbeddingService = EmbeddingService_1 = class EmbeddingService {
             await this.batchStoreEmbeddings(messagesWithoutEmbeddings);
         }
         catch (error) {
-            this.logger.error(`Failed to process missing embeddings: ${error.message}`, error.stack);
+            const errorObj = error;
+            this.logger.error(`Failed to process missing embeddings: ${errorObj.message}`, errorObj.stack);
         }
     }
 };

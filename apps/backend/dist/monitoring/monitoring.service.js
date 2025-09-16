@@ -27,12 +27,12 @@ let MonitoringService = MonitoringService_1 = class MonitoringService {
         this.customLogger = customLogger;
     }
     async getSystemMetrics() {
-        const startTime = Date.now();
         const cpuUsage = process.cpuUsage();
-        const loadAverage = require('os').loadavg();
+        const os = await import('os');
+        const loadAverage = os.loadavg();
         const memoryUsage = process.memoryUsage();
-        const totalMemory = require('os').totalmem();
-        const freeMemory = require('os').freemem();
+        const totalMemory = os.totalmem();
+        const freeMemory = os.freemem();
         const dbStartTime = Date.now();
         let dbConnected = false;
         let dbResponseTime = 0;

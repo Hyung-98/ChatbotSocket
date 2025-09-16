@@ -5,6 +5,6 @@ export declare class ErrorLoggingInterceptor implements NestInterceptor {
     private errorLogger;
     private readonly logger;
     constructor(errorLogger: ErrorLoggerService);
-    intercept(context: ExecutionContext, next: CallHandler): Observable<any>;
+    intercept(context: ExecutionContext, next: CallHandler): Observable<unknown>;
     private sanitizeBody;
 }

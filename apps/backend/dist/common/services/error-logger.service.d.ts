@@ -3,7 +3,7 @@ export interface ErrorLogData {
     level: 'error' | 'warn' | 'info' | 'debug' | 'fatal';
     message: string;
     context?: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
     userId?: string;
     roomId?: string;
     stack?: string;

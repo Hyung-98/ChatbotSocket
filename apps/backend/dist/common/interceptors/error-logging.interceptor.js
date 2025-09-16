@@ -23,8 +23,10 @@ let ErrorLoggingInterceptor = ErrorLoggingInterceptor_1 = class ErrorLoggingInte
     }
     intercept(context, next) {
         const request = context.switchToHttp().getRequest();
-        const { method, url, body, user } = request;
+        const { method, url, body } = request;
+        const user = request.user;
         return next.handle().pipe((0, operators_1.catchError)((error) => {
+            const errorWithStatus = error;
             const errorData = {
                 level: 'error',
                 message: error.message || 'Unknown error occurred',
@@ -36,17 +38,17 @@ let ErrorLoggingInterceptor = ErrorLoggingInterceptor_1 = class ErrorLoggingInte
                     userId: user?.id,
                     userEmail: user?.email,
                     stack: error.stack,
-                    statusCode: error.status || 500,
+                    statusCode: errorWithStatus.status || 500,
                 },
                 userId: user?.id,
                 stack: error.stack,
             };
-            this.errorLogger.logError(errorData);
+            void this.errorLogger.logError(errorData);
             return (0, rxjs_1.throwError)(() => error);
         }));
     }
     sanitizeBody(body) {
-        if (!body)
+        if (!body || typeof body !== 'object')
             return null;
         const sanitized = { ...body };
         const sensitiveFields = ['password', 'token', 'secret', 'key', 'auth'];

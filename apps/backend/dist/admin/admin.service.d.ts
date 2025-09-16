@@ -177,9 +177,9 @@ export declare class AdminService {
         }[];
         dailyUsage: {
             date: string;
-            tokens: any;
-            cost: any;
-            requests: any;
+            tokens: number;
+            cost: number;
+            requests: number;
         }[];
         userUsage: (Prisma.PickEnumerable<Prisma.TokenUsageGroupByOutputType, "userId"[]> & {
             _count: {

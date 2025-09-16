@@ -299,10 +299,17 @@ let ChatGateway = class ChatGateway {
             const longMessageThreshold = 1500;
             if (sanitizedText.length >= longMessageThreshold) {
                 const longMessageGuard = new throttle_guard_1.LongMessageThrottlerGuard(this.redisService);
-                const canSendLongMessage = await longMessageGuard.canActivate({
+                const mockContext = {
                     switchToWs: () => ({ getClient: () => client }),
                     getHandler: () => ({ name: 'send' }),
-                });
+                    getClass: () => ({ name: 'ChatGateway' }),
+                    getArgs: () => [],
+                    getArgByIndex: () => undefined,
+                    switchToRpc: () => ({}),
+                    switchToHttp: () => ({}),
+                    getType: () => 'ws',
+                };
+                const canSendLongMessage = await longMessageGuard.canActivate(mockContext);
                 if (!canSendLongMessage) {
                     throw new common_2.BadRequestException('긴 메시지 전송이 너무 빈번합니다. 잠시 후 다시 시도해주세요.');
                 }

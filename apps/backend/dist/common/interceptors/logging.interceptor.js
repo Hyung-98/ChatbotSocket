@@ -25,7 +25,8 @@ let LoggingInterceptor = class LoggingInterceptor {
         return next.handle().pipe((0, operators_1.tap)(() => {
             const duration = Date.now() - startTime;
             const durationSeconds = duration / 1000;
-            this.telemetryService.recordRequestDuration(request.method, request.route?.path || request.url, response.statusCode.toString(), durationSeconds);
+            const requestWithRoute = request;
+            this.telemetryService.recordRequestDuration(request.method, requestWithRoute.route?.path || request.url, response.statusCode.toString(), durationSeconds);
             console.log(`${request.method} ${request.url} ${response.statusCode} - ${duration}ms`);
         }));
     }

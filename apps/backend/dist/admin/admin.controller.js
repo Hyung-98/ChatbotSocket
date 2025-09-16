@@ -54,13 +54,7 @@ let AdminController = class AdminController {
         return this.adminService.createUser(userData);
     }
     async updateUserRole(userId, role, req) {
-        try {
-            const result = await this.adminService.updateUserRole(userId, role, req.user?.id);
-            return result;
-        }
-        catch (error) {
-            throw error;
-        }
+        return this.adminService.updateUserRole(userId, role, req.user?.id);
     }
     async toggleUserStatus(userId) {
         return this.adminService.toggleUserStatus(userId);
@@ -72,13 +66,8 @@ let AdminController = class AdminController {
         return this.adminService.updateRoom(roomId, updateData);
     }
     async deleteUser(userId) {
-        try {
-            await this.adminService.deleteUser(userId);
-            return { message: '사용자가 삭제되었습니다.' };
-        }
-        catch (error) {
-            throw error;
-        }
+        await this.adminService.deleteUser(userId);
+        return { message: '사용자가 삭제되었습니다.' };
     }
     async deleteRoom(roomId) {
         await this.adminService.deleteRoom(roomId);

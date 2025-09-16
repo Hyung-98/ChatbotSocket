@@ -260,7 +260,16 @@ export class EmbeddingService {
       const embedding = await this.createEmbedding(content);
 
       // 코사인 유사도 기반 검색 (1 - 코사인 거리 = 유사도)
-      const similarMessages = await this.prismaService.$queryRaw`
+      const similarMessages = await this.prismaService.$queryRaw<
+        Array<{
+          id: string;
+          content: string;
+          role: string;
+          createdAt: Date;
+          userId: string | null;
+          similarity: number;
+        }>
+      >`
         SELECT 
           id, 
           content, 
@@ -276,10 +285,8 @@ export class EmbeddingService {
         LIMIT ${limit}
       `;
 
-      this.logger.debug(
-        `Found ${(similarMessages as unknown[]).length} similar messages`,
-      );
-      return similarMessages as Array<{ id: string; content: string }>;
+      this.logger.debug(`Found ${similarMessages.length} similar messages`);
+      return similarMessages;
     } catch (error) {
       const errorObj = error as Error;
       this.logger.error(

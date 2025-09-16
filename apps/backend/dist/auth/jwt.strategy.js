@@ -26,7 +26,8 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
         this.authService = authService;
     }
     async validate(payload) {
-        const isBlacklisted = await this.authService.isTokenBlacklisted(payload.jti || payload.sub);
+        const payloadWithJti = payload;
+        const isBlacklisted = await this.authService.isTokenBlacklisted(payloadWithJti.jti || payloadWithJti.sub);
         if (isBlacklisted) {
             throw new common_1.UnauthorizedException('토큰이 무효화되었습니다.');
         }

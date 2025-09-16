@@ -97,7 +97,7 @@ let LlmService = LlmService_1 = class LlmService {
                         errorMessage = `AI 응답 생성 중 오류가 발생했습니다: ${error.message}`;
                     }
                 }
-                catch (parseError) {
+                catch {
                     if (error.message.includes('API key') ||
                         error.message.includes('authentication')) {
                         errorMessage =

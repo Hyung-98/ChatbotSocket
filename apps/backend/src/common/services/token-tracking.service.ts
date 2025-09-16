@@ -106,12 +106,12 @@ export class TokenTrackingService {
     }
 
     if (options.startDate || options.endDate) {
-      where.createdAt = {};
+      where.createdAt = {} as any;
       if (options.startDate) {
-        where.createdAt.gte = options.startDate;
+        (where.createdAt as any).gte = options.startDate;
       }
       if (options.endDate) {
-        where.createdAt.lte = options.endDate;
+        (where.createdAt as any).lte = options.endDate;
       }
     }
 

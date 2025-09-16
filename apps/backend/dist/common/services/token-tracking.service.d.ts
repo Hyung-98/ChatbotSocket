@@ -50,9 +50,9 @@ export declare class TokenTrackingService {
         }[];
         dailyUsage: {
             date: string;
-            tokens: any;
-            cost: any;
-            requests: any;
+            tokens: number;
+            cost: number;
+            requests: number;
         }[];
         userUsage: (import("@prisma/client").Prisma.PickEnumerable<import("@prisma/client").Prisma.TokenUsageGroupByOutputType, "userId"[]> & {
             _count: {

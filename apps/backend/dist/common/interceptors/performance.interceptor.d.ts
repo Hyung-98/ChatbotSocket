@@ -4,5 +4,5 @@ import { MonitoringService } from '../../monitoring/monitoring.service';
 export declare class PerformanceInterceptor implements NestInterceptor {
     private monitoringService;
     constructor(monitoringService: MonitoringService);
-    intercept(context: ExecutionContext, next: CallHandler): Observable<any>;
+    intercept(context: ExecutionContext, next: CallHandler): Observable<unknown>;
 }

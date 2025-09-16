@@ -83,12 +83,12 @@ export class ErrorLoggerService {
     }
 
     if (options.startDate || options.endDate) {
-      where.timestamp = {};
+      where.timestamp = {} as any;
       if (options.startDate) {
-        where.timestamp.gte = options.startDate;
+        (where.timestamp as any).gte = options.startDate;
       }
       if (options.endDate) {
-        where.timestamp.lte = options.endDate;
+        (where.timestamp as any).lte = options.endDate;
       }
     }
 
@@ -116,12 +116,12 @@ export class ErrorLoggerService {
     const where: Record<string, unknown> = {};
 
     if (options.startDate || options.endDate) {
-      where.timestamp = {};
+      where.timestamp = {} as any;
       if (options.startDate) {
-        where.timestamp.gte = options.startDate;
+        (where.timestamp as any).gte = options.startDate;
       }
       if (options.endDate) {
-        where.timestamp.lte = options.endDate;
+        (where.timestamp as any).lte = options.endDate;
       }
     }
 

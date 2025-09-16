@@ -7,9 +7,8 @@ import {
   MessageBody,
   ConnectedSocket,
   OnGatewayInit,
-  ExecutionContext,
 } from '@nestjs/websockets';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, ExecutionContext } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { AuthService } from '../auth/auth.service';
@@ -38,12 +37,15 @@ interface AuthenticatedSocket extends Socket {
   };
 }
 
-interface MockExecutionContext extends ExecutionContext {
+interface MockExecutionContext {
   switchToWs: () => { getClient: () => AuthenticatedSocket };
   getHandler: () => { name: string };
   getClass: () => { name: string };
   getArgs: () => unknown[];
   getArgByIndex: (index: number) => unknown;
+  switchToRpc: () => any;
+  switchToHttp: () => any;
+  getType: () => string;
 }
 
 @WebSocketGateway({
@@ -443,10 +445,10 @@ export class ChatGateway
         const longMessageGuard = new LongMessageThrottlerGuard(
           this.redisService,
         );
-        const mockContext: Partial<MockExecutionContext> = {
+        const mockContext: MockExecutionContext = {
           switchToWs: () => ({ getClient: () => client }),
           getHandler: () => ({ name: 'send' }),
-          getClass: () => ({}),
+          getClass: () => ({ name: 'ChatGateway' }),
           getArgs: () => [],
           getArgByIndex: () => undefined,
           switchToRpc: () => ({}),
@@ -454,7 +456,7 @@ export class ChatGateway
           getType: () => 'ws',
         };
         const canSendLongMessage = await longMessageGuard.canActivate(
-          mockContext as MockExecutionContext,
+          mockContext as ExecutionContext,
         );
         if (!canSendLongMessage) {
           throw new BadRequestException(

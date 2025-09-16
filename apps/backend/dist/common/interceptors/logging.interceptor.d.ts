@@ -4,5 +4,5 @@ import { TelemetryService } from '../../telemetry/telemetry.service';
 export declare class LoggingInterceptor implements NestInterceptor {
     private readonly telemetryService;
     constructor(telemetryService: TelemetryService);
-    intercept(context: ExecutionContext, next: CallHandler): Observable<any>;
+    intercept(context: ExecutionContext, next: CallHandler): Observable<unknown>;
 }

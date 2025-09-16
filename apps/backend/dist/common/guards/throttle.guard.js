@@ -22,7 +22,8 @@ let SocketThrottlerGuard = class SocketThrottlerGuard {
     }
     async canActivate(context) {
         const client = context.switchToWs().getClient();
-        const userId = client.data?.user?.id;
+        const clientData = client.data;
+        const userId = clientData?.user?.id;
         if (!userId)
             return true;
         const event = context.getHandler().name;

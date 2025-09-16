@@ -54,10 +54,19 @@ let ApiThrottleGuard = class ApiThrottleGuard {
         return { req: request, res: response };
     }
     getIp(request) {
-        return (request.ip ||
-            request.connection?.remoteAddress ||
-            request.socket?.remoteAddress ||
-            request.headers['x-forwarded-for']?.split(',')[0] ||
+        const forwardedFor = request.headers['x-forwarded-for'];
+        let forwardedIp;
+        if (Array.isArray(forwardedFor)) {
+            forwardedIp = forwardedFor[0];
+        }
+        else if (typeof forwardedFor === 'string') {
+            forwardedIp = forwardedFor.split(',')[0];
+        }
+        const extendedRequest = request;
+        return ((extendedRequest.ip ||
+            extendedRequest.connection?.remoteAddress ||
+            extendedRequest.socket?.remoteAddress ||
+            forwardedIp) ??
             'unknown');
     }
 };
