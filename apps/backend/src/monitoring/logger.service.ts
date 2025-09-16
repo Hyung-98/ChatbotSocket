@@ -9,7 +9,7 @@ export interface LogEntry {
   message: string;
   context?: string;
   userId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   ip?: string;
   userAgent?: string;
 }
@@ -23,36 +23,40 @@ export class CustomLoggerService implements LoggerService {
     private redis: RedisService,
   ) {}
 
-  log(message: string, context?: string, metadata?: Record<string, any>) {
-    this.writeLog('log', message, context, metadata);
+  log(message: string, context?: string, metadata?: Record<string, unknown>) {
+    void this.writeLog('log', message, context, metadata);
   }
 
   error(
     message: string,
     trace?: string,
     context?: string,
-    metadata?: Record<string, any>,
+    metadata?: Record<string, unknown>,
   ) {
-    this.writeLog('error', message, context, { ...metadata, trace });
+    void this.writeLog('error', message, context, { ...metadata, trace });
   }
 
-  warn(message: string, context?: string, metadata?: Record<string, any>) {
-    this.writeLog('warn', message, context, metadata);
+  warn(message: string, context?: string, metadata?: Record<string, unknown>) {
+    void this.writeLog('warn', message, context, metadata);
   }
 
-  debug(message: string, context?: string, metadata?: Record<string, any>) {
-    this.writeLog('debug', message, context, metadata);
+  debug(message: string, context?: string, metadata?: Record<string, unknown>) {
+    void this.writeLog('debug', message, context, metadata);
   }
 
-  verbose(message: string, context?: string, metadata?: Record<string, any>) {
-    this.writeLog('verbose', message, context, metadata);
+  verbose(
+    message: string,
+    context?: string,
+    metadata?: Record<string, unknown>,
+  ) {
+    void this.writeLog('verbose', message, context, metadata);
   }
 
   private async writeLog(
     level: LogLevel,
     message: string,
     context?: string,
-    metadata?: Record<string, any>,
+    metadata?: Record<string, unknown>,
   ) {
     const logEntry: LogEntry = {
       timestamp: new Date(),
@@ -101,7 +105,7 @@ export class CustomLoggerService implements LoggerService {
       const redisClient = this.redis.getClient();
       if (redisClient) {
         const logs = await redisClient.lRange('recent_logs', 0, limit - 1);
-        return logs.map((log) => JSON.parse(log)).reverse(); // 최신순으로 정렬
+        return logs.map((log) => JSON.parse(log) as LogEntry).reverse(); // 최신순으로 정렬
       }
       return [];
     } catch (error) {

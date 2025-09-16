@@ -434,10 +434,18 @@ export class ChatGateway
         const longMessageGuard = new LongMessageThrottlerGuard(
           this.redisService,
         );
-        const canSendLongMessage = await longMessageGuard.canActivate({
+        const mockContext: ExecutionContext = {
           switchToWs: () => ({ getClient: () => client }),
           getHandler: () => ({ name: 'send' }),
-        } as any);
+          getClass: () => ({}),
+          getArgs: () => [],
+          getArgByIndex: () => undefined,
+          switchToRpc: () => ({}),
+          switchToHttp: () => ({}),
+          getType: () => 'ws',
+        };
+        const canSendLongMessage =
+          await longMessageGuard.canActivate(mockContext);
 
         if (!canSendLongMessage) {
           throw new BadRequestException(

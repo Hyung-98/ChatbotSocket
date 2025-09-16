@@ -1,5 +1,6 @@
 import { Injectable, ExecutionContext, CanActivate } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
+import { Request, Response } from 'express';
 import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
@@ -48,18 +49,37 @@ export class ApiThrottleGuard implements CanActivate {
     }
   }
 
-  private getRequestResponse(context: ExecutionContext) {
-    const request = context.switchToHttp().getRequest();
-    const response = context.switchToHttp().getResponse();
+  private getRequestResponse(context: ExecutionContext): {
+    req: Request;
+    res: Response;
+  } {
+    const request = context.switchToHttp().getRequest<Request>();
+    const response = context.switchToHttp().getResponse<Response>();
     return { req: request, res: response };
   }
 
-  private getIp(request: any): string {
+  private getIp(request: Request): string {
+    const forwardedFor = request.headers['x-forwarded-for'];
+    let forwardedIp: string | undefined;
+
+    if (Array.isArray(forwardedFor)) {
+      forwardedIp = forwardedFor[0];
+    } else if (typeof forwardedFor === 'string') {
+      forwardedIp = forwardedFor.split(',')[0];
+    }
+
+    // Express Request 타입 확장을 위한 안전한 접근
+    const extendedRequest = request as Request & {
+      ip?: string;
+      connection?: { remoteAddress?: string };
+      socket?: { remoteAddress?: string };
+    };
+
     return (
-      request.ip ||
-      request.connection?.remoteAddress ||
-      request.socket?.remoteAddress ||
-      request.headers['x-forwarded-for']?.split(',')[0] ||
+      (extendedRequest.ip ||
+        extendedRequest.connection?.remoteAddress ||
+        extendedRequest.socket?.remoteAddress ||
+        forwardedIp) ??
       'unknown'
     );
   }

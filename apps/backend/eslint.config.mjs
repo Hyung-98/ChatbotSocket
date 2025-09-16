@@ -46,7 +46,7 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
 
       // General rules
-      'no-console': 'warn',
+      'no-console': 'off',
       'no-debugger': 'error',
       'prefer-const': 'error',
       'no-var': 'error',

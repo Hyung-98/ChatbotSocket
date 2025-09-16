@@ -91,7 +91,7 @@ export class TokenTrackingService {
     roomId?: string;
     provider?: string;
   }) {
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
     if (options.userId) {
       where.userId = options.userId;
@@ -183,7 +183,7 @@ export class TokenTrackingService {
     };
   }
 
-  private async getDailyUsageStats(where: any) {
+  private async getDailyUsageStats(where: Record<string, unknown>) {
     const last30Days = Array.from({ length: 30 }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - i);
@@ -205,7 +205,10 @@ export class TokenTrackingService {
       _count: { id: true },
     });
 
-    const dailyMap = new Map();
+    const dailyMap = new Map<
+      string,
+      { date: string; tokens: number; cost: number; requests: number }
+    >();
     dailyStats.forEach((stat) => {
       const date = stat.createdAt.toISOString().split('T')[0];
       dailyMap.set(date, {
@@ -224,7 +227,7 @@ export class TokenTrackingService {
     }));
   }
 
-  private async getUserUsageStats(where: any) {
+  private async getUserUsageStats(where: Record<string, unknown>) {
     return this.prisma.tokenUsage.groupBy({
       by: ['userId'],
       where,

@@ -5,7 +5,7 @@ export interface ErrorLogData {
   level: 'error' | 'warn' | 'info' | 'debug' | 'fatal';
   message: string;
   context?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   userId?: string;
   roomId?: string;
   stack?: string;
@@ -76,7 +76,7 @@ export class ErrorLoggerService {
     startDate?: Date;
     endDate?: Date;
   }) {
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
     if (options.level) {
       where.level = options.level;
@@ -113,7 +113,7 @@ export class ErrorLoggerService {
   }
 
   async getErrorStats(options: { startDate?: Date; endDate?: Date }) {
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
     if (options.startDate || options.endDate) {
       where.timestamp = {};

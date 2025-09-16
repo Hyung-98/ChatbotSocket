@@ -43,8 +43,11 @@ async function bootstrap() {
 
   // CORS 설정 추가 (모바일 지원)
   app.enableCors({
-    origin: (origin, callback) => {
-      const allowedOrigins = [
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      const allowedOrigins: (string | RegExp)[] = [
         'http://localhost:3000',
         'http://localhost:3001',
         'http://127.0.0.1:3000',
@@ -94,7 +97,7 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }
-bootstrap().catch((error) => {
+bootstrap().catch((error: Error) => {
   console.error('Failed to start application:', error);
   process.exit(1);
 });

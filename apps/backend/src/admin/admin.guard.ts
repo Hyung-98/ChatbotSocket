@@ -4,8 +4,17 @@ import {
   ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UserRole } from '@prisma/client';
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    role: UserRole;
+  };
+}
 
 @Injectable()
 export class AdminGuard implements CanActivate {
@@ -19,7 +28,7 @@ export class AdminGuard implements CanActivate {
     }
 
     // 사용자 정보 가져오기
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = request.user;
 
     if (!user) {
@@ -47,7 +56,7 @@ export class SuperAdminGuard implements CanActivate {
     }
 
     // 사용자 정보 가져오기
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = request.user;
 
     if (!user) {

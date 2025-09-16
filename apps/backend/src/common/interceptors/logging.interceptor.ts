@@ -13,7 +13,7 @@ import { TelemetryService } from '../../telemetry/telemetry.service';
 export class LoggingInterceptor implements NestInterceptor {
   constructor(private readonly telemetryService: TelemetryService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
     const startTime = Date.now();
@@ -24,9 +24,12 @@ export class LoggingInterceptor implements NestInterceptor {
         const durationSeconds = duration / 1000;
 
         // 메트릭 기록
+        const requestWithRoute = request as Request & {
+          route?: { path?: string };
+        };
         this.telemetryService.recordRequestDuration(
           request.method,
-          request.route?.path || request.url,
+          requestWithRoute.route?.path || request.url,
           response.statusCode.toString(),
           durationSeconds,
         );

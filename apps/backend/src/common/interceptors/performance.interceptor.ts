@@ -12,9 +12,9 @@ import { MonitoringService } from '../../monitoring/monitoring.service';
 export class PerformanceInterceptor implements NestInterceptor {
   constructor(private monitoringService: MonitoringService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const startTime = Date.now();
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<Request>();
     const method = request.method;
     const url = request.url;
 

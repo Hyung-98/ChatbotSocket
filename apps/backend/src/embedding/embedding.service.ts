@@ -95,11 +95,12 @@ export class EmbeddingService {
 
       return embedding;
     } catch (error) {
+      const errorObj = error as Error;
       this.logger.error(
-        `Failed to create embedding: ${error.message}`,
-        error.stack,
+        `Failed to create embedding: ${errorObj.message}`,
+        errorObj.stack,
       );
-      throw new Error(`Embedding generation failed: ${error.message}`);
+      throw new Error(`Embedding generation failed: ${errorObj.message}`);
     }
   }
 
@@ -123,7 +124,7 @@ export class EmbeddingService {
    * @returns 1536차원 벡터 배열
    */
   private createHashBasedEmbedding(text: string): number[] {
-    const embedding = new Array(1536).fill(0);
+    const embedding: number[] = Array.from({ length: 1536 }, () => 0);
     const words = text.toLowerCase().split(/\s+/);
 
     // 각 단어의 해시를 기반으로 임베딩 생성
@@ -146,7 +147,7 @@ export class EmbeddingService {
 
     // 벡터 정규화
     const magnitude = Math.sqrt(
-      embedding.reduce((sum, val) => sum + val * val, 0) as number,
+      embedding.reduce((sum, val) => sum + val * val, 0),
     );
     if (magnitude > 0) {
       for (let i = 0; i < embedding.length; i++) {
@@ -154,7 +155,7 @@ export class EmbeddingService {
       }
     }
 
-    return embedding as number[];
+    return embedding;
   }
 
   /**
@@ -171,7 +172,9 @@ export class EmbeddingService {
       }
       return null;
     } catch (error) {
-      this.logger.warn(`Failed to get cached embedding: ${error.message}`);
+      this.logger.warn(
+        `Failed to get cached embedding: ${(error as Error).message}`,
+      );
       return null;
     }
   }
@@ -190,7 +193,9 @@ export class EmbeddingService {
 
       await redis.setEx(cacheKey, ttlSeconds, JSON.stringify(embedding));
     } catch (error) {
-      this.logger.warn(`Failed to cache embedding: ${error.message}`);
+      this.logger.warn(
+        `Failed to cache embedding: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -219,9 +224,10 @@ export class EmbeddingService {
         `Successfully stored embedding for message ${messageId}`,
       );
     } catch (error) {
+      const errorObj = error as Error;
       this.logger.error(
-        `Failed to store message embedding: ${error.message}`,
-        error.stack,
+        `Failed to store message embedding: ${errorObj.message}`,
+        errorObj.stack,
       );
       // 임베딩 저장 실패는 치명적이지 않으므로 에러를 던지지 않음
     }
@@ -271,13 +277,14 @@ export class EmbeddingService {
       `;
 
       this.logger.debug(
-        `Found ${(similarMessages as any[]).length} similar messages`,
+        `Found ${(similarMessages as unknown[]).length} similar messages`,
       );
-      return similarMessages as any[];
+      return similarMessages as Array<{ id: string; content: string }>;
     } catch (error) {
+      const errorObj = error as Error;
       this.logger.error(
-        `Failed to find similar messages: ${error.message}`,
-        error.stack,
+        `Failed to find similar messages: ${errorObj.message}`,
+        errorObj.stack,
       );
       return [];
     }
@@ -307,7 +314,7 @@ export class EmbeddingService {
             await this.storeMessageEmbedding(message.id, message.content);
           } catch (error) {
             this.logger.warn(
-              `Failed to store embedding for message ${message.id}: ${error.message}`,
+              `Failed to store embedding for message ${message.id}: ${(error as Error).message}`,
             );
           }
         });
@@ -322,9 +329,10 @@ export class EmbeddingService {
 
       this.logger.debug(`Completed batch embedding storage`);
     } catch (error) {
+      const errorObj = error as Error;
       this.logger.error(
-        `Failed to batch store embeddings: ${error.message}`,
-        error.stack,
+        `Failed to batch store embeddings: ${errorObj.message}`,
+        errorObj.stack,
       );
     }
   }
@@ -339,7 +347,7 @@ export class EmbeddingService {
     setImmediate(() => {
       this.batchStoreEmbeddings(messages).catch((error) => {
         this.logger.error(
-          `Background embedding processing failed: ${error.message}`,
+          `Background embedding processing failed: ${(error as Error).message}`,
         );
       });
     });
@@ -381,19 +389,22 @@ export class EmbeddingService {
             LIMIT ${limit}
           `;
 
-      if ((messagesWithoutEmbeddings as any[]).length === 0) {
+      if ((messagesWithoutEmbeddings as unknown[]).length === 0) {
         this.logger.debug('No messages without embeddings found');
         return;
       }
 
       this.logger.debug(
-        `Found ${(messagesWithoutEmbeddings as any[]).length} messages without embeddings`,
+        `Found ${(messagesWithoutEmbeddings as unknown[]).length} messages without embeddings`,
       );
-      await this.batchStoreEmbeddings(messagesWithoutEmbeddings as any[]);
+      await this.batchStoreEmbeddings(
+        messagesWithoutEmbeddings as Array<{ id: string; content: string }>,
+      );
     } catch (error) {
+      const errorObj = error as Error;
       this.logger.error(
-        `Failed to process missing embeddings: ${error.message}`,
-        error.stack,
+        `Failed to process missing embeddings: ${errorObj.message}`,
+        errorObj.stack,
       );
     }
   }

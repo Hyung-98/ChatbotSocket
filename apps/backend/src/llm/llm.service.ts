@@ -100,7 +100,10 @@ export class LlmService {
       if (error instanceof Error) {
         // Anthropic API 오류 메시지 파싱 시도
         try {
-          const errorData = JSON.parse(error.message);
+          const errorData = JSON.parse(error.message) as {
+            type?: string;
+            error?: { type?: string; message?: string };
+          };
           if (errorData.type === 'error' && errorData.error) {
             const apiError = errorData.error;
             if (apiError.type === 'authentication_error') {
@@ -117,7 +120,7 @@ export class LlmService {
           } else {
             errorMessage = `AI 응답 생성 중 오류가 발생했습니다: ${error.message}`;
           }
-        } catch (parseError) {
+        } catch {
           // JSON 파싱 실패 시 기존 로직 사용
           if (
             error.message.includes('API key') ||
@@ -209,7 +212,7 @@ export class LlmService {
       return this.truncateMessages(allMessages);
     } catch (error) {
       this.logger.error(
-        `Failed to prepare messages with RAG: ${error.message}`,
+        `Failed to prepare messages with RAG: ${(error as Error).message}`,
       );
 
       // RAG 실패 시 기본 동작으로 폴백
@@ -217,7 +220,9 @@ export class LlmService {
     }
   }
 
-  private buildSystemPrompt(similarMessages: any[]): string {
+  private buildSystemPrompt(
+    similarMessages: Array<{ id: string; content: string }>,
+  ): string {
     let systemPrompt =
       "You are a helpful AI assistant. Provide clear, concise, and helpful responses. If you don't know something, say so honestly.";
 

@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { UserRole } from '@prisma/client';
 
 interface AuthenticatedUser {
@@ -12,11 +13,15 @@ interface AuthenticatedUser {
   role: UserRole;
 }
 
+interface AuthenticatedRequest extends Request {
+  user?: AuthenticatedUser;
+}
+
 @Injectable()
 export class AdminGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as AuthenticatedUser;
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.user;
 
     if (!user) {
       throw new ForbiddenException('인증이 필요합니다.');
@@ -33,8 +38,8 @@ export class AdminGuard implements CanActivate {
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as AuthenticatedUser;
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.user;
 
     if (!user) {
       throw new ForbiddenException('인증이 필요합니다.');

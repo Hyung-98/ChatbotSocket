@@ -26,27 +26,27 @@ export class InputSanitizationMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     // XSS 방지를 위한 기본적인 입력 정리
     if (req.body) {
-      this.sanitizeObject(req.body);
+      this.sanitizeObject(req.body as Record<string, unknown>);
     }
     if (req.query) {
-      this.sanitizeObject(req.query);
+      this.sanitizeObject(req.query as Record<string, unknown>);
     }
     if (req.params) {
-      this.sanitizeObject(req.params);
+      this.sanitizeObject(req.params as Record<string, unknown>);
     }
     next();
   }
 
-  private sanitizeObject(obj: any): void {
+  private sanitizeObject(obj: Record<string, unknown>): void {
     for (const key in obj) {
       if (typeof obj[key] === 'string') {
         // 기본적인 HTML 태그 제거
-        obj[key] = obj[key]
+        obj[key] = (obj[key] as string)
           .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
           .replace(/<[^>]*>/g, '')
           .trim();
       } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-        this.sanitizeObject(obj[key]);
+        this.sanitizeObject(obj[key] as Record<string, unknown>);
       }
     }
   }

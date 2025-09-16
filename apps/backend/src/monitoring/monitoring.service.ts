@@ -62,16 +62,15 @@ export class MonitoringService {
   ) {}
 
   async getSystemMetrics(): Promise<SystemMetrics> {
-    const startTime = Date.now();
-
     // CPU 사용률 (Node.js에서는 제한적)
     const cpuUsage = process.cpuUsage();
-    const loadAverage = require('os').loadavg();
+    const os = await import('os');
+    const loadAverage = os.loadavg();
 
     // 메모리 사용량
     const memoryUsage = process.memoryUsage();
-    const totalMemory = require('os').totalmem();
-    const freeMemory = require('os').freemem();
+    const totalMemory = os.totalmem();
+    const freeMemory = os.freemem();
 
     // 데이터베이스 상태 확인
     const dbStartTime = Date.now();
@@ -84,7 +83,7 @@ export class MonitoringService {
     } catch (error) {
       this.customLogger.error(
         '데이터베이스 연결 실패',
-        error.stack,
+        (error as Error).stack,
         'MonitoringService',
       );
     }
@@ -111,7 +110,7 @@ export class MonitoringService {
     } catch (error) {
       this.customLogger.error(
         'Redis 연결 실패',
-        error.stack,
+        (error as Error).stack,
         'MonitoringService',
       );
     }
