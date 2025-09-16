@@ -43,8 +43,8 @@ interface MockExecutionContext {
   getClass: () => { name: string };
   getArgs: () => unknown[];
   getArgByIndex: (index: number) => unknown;
-  switchToRpc: () => any;
-  switchToHttp: () => any;
+  switchToRpc: () => unknown;
+  switchToHttp: () => unknown;
   getType: () => string;
 }
 
@@ -451,8 +451,8 @@ export class ChatGateway
           getClass: () => ({ name: 'ChatGateway' }),
           getArgs: () => [],
           getArgByIndex: () => undefined,
-          switchToRpc: () => ({}),
-          switchToHttp: () => ({}),
+          switchToRpc: () => ({}) as unknown,
+          switchToHttp: () => ({}) as unknown,
           getType: () => 'ws',
         };
         const canSendLongMessage = await longMessageGuard.canActivate(
