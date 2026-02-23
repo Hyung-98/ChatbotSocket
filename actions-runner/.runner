@@ -1,0 +1,11 @@
+﻿{
+  "agentId": 21,
+  "agentName": "MW-HYUNG",
+  "poolId": 1,
+  "poolName": "Default",
+  "serverUrl": "https://pipelinesghubeus26.actions.githubusercontent.com/Wr9WMesJXJ1AW1Pq1y0fx8DZfTwhZFkWcEig3X3bQ7LEsSmjsm/",
+  "gitHubUrl": "https://github.com/Hyung-98/ChatbotSocket",
+  "workFolder": "_work",
+  "useV2Flow": true,
+  "serverUrlV2": "https://broker.actions.githubusercontent.com/"
+}
