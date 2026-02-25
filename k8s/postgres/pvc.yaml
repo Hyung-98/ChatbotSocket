@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: chatbotsocket
+  labels:
+    app: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # For minikube: omit storageClassName to use the default "standard" (hostPath) provisioner.
+  # For cloud providers (EKS, GKE, AKS): set the appropriate storage class:
+  #   AWS EKS:  storageClassName: gp2
+  #   GKE:      storageClassName: standard-rwo
+  #   AKS:      storageClassName: managed-premium
+  # storageClassName: standard

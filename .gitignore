@@ -34,4 +34,5 @@ yarn-error.log*
 next-env.d.ts
 
 # prisma
-/prisma/migrations
+# /prisma/migrations is intentionally NOT ignored — migration files must be committed
+# so Docker init containers can run `prisma migrate deploy`

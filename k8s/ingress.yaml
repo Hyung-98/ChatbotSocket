@@ -1,0 +1,43 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chatbotsocket-ingress
+  namespace: chatbotsocket
+  labels:
+    app: chatbotsocket
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+
+    # SSE CRITICAL: Disable proxy buffering so stream chunks reach the client immediately.
+    # Without this, nginx buffers the entire SSE response and the client sees nothing
+    # until the AI finishes generating — defeating the purpose of streaming.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+
+    # SSE CRITICAL: Extend timeouts for long-lived SSE connections.
+    # AI responses can take minutes; default nginx timeout (60s) would kill them.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+
+    # Match next.config.js serverActions bodySizeLimit
+    nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+
+    # Keep upstream connections alive across requests
+    nginx.ingress.kubernetes.io/upstream-keepalive-connections: "32"
+spec:
+  rules:
+    - host: chatbotsocket.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: chatbotsocket-service
+                port:
+                  number: 80
+# To access locally with minikube:
+#   1. minikube addons enable ingress
+#   2. minikube tunnel  (in a separate terminal)
+#   3. echo "127.0.0.1 chatbotsocket.local" | sudo tee -a /etc/hosts
+#   4. Open http://chatbotsocket.local

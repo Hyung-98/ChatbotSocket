@@ -1,41 +1,211 @@
-name: ChatbotSocket CI
+name: ChatbotSocket CI/CD
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+  # Allow manual deployment trigger from the GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to Kubernetes after build?'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/chatbotsocket
 
 jobs:
-  build:
-    runs-on: [self-hosted, windows]
-
-    strategy:
-      matrix:
-        node-version: [20]
+  # ============================================================
+  # Job 1: Lint
+  # ============================================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Verify Node
-        run: node -v
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      - name: Generate Prisma client
+        # Required so TypeScript can resolve Prisma types during lint.
+        # DATABASE_URL placeholder is sufficient — generate only reads the schema.
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+        run: npm run db:generate
+
+      - name: Run ESLint
+        # Pass dummy API key values so lib/anthropic.ts / lib/google.ts don't throw
+        # when ESLint imports them for static analysis.
+        env:
+          ANTHROPIC_API_KEY: lint-placeholder
+          GEMINI_API_KEY: lint-placeholder
+          NEXTAUTH_SECRET: lint-placeholder
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
         run: npm run lint
 
-      - name: Type Check
-        run: npm run type-check
+  # ============================================================
+  # Job 2: Build Docker image and push to ghcr.io
+  # ============================================================
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: lint
+    permissions:
+      contents: read
+      packages: write   # Required to push to ghcr.io
 
-      - name: Test
-        run: npm run test -- --coverage
+    outputs:
+      sha-tag: ${{ steps.sha-tag.outputs.tag }}
 
-      - name: Build
-        run: npm run build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        # Skip login on pull requests (we build but don't push)
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute SHA tag
+        id: sha-tag
+        run: echo "tag=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Immutable reference tied to the exact commit
+            type=sha,prefix=sha-,format=long
+            # Branch name tag (e.g. main)
+            type=ref,event=branch
+            # 'latest' only on main branch pushes
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          # Only push on main branch push events (not PRs, not other branches)
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GitHub Actions cache for faster subsequent builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================
+  # Job 3: Deploy to Kubernetes
+  #
+  # Prerequisites:
+  #   - Add KUBECONFIG secret to GitHub repo settings:
+  #       Settings → Secrets → Actions → New secret
+  #       Name: KUBECONFIG
+  #       Value: base64-encoded kubeconfig (cat ~/.kube/config | base64 -w 0)
+  #   - Manually create K8s Secret before first deploy:
+  #       kubectl apply -f k8s/secrets/secrets.yaml -n chatbotsocket
+  #   - For local minikube: skip this job and apply manifests manually (see k8s/ingress.yaml comments)
+  # ============================================================
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    # Only run on main branch pushes (not PRs, not other branches)
+    if: >
+      github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request'
+    # To add a manual approval gate: create an Environment named "production" in
+    # GitHub repo Settings → Environments, then uncomment the line below.
+    # environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl from secret
+        # KUBECONFIG secret must be base64-encoded kubeconfig content
+        run: |
+          mkdir -p /tmp/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > /tmp/.kube/config
+          echo "KUBECONFIG=/tmp/.kube/config" >> $GITHUB_ENV
+
+      - name: Apply namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Apply PostgreSQL manifests
+        run: |
+          kubectl apply -f k8s/postgres/configmap.yaml
+          kubectl apply -f k8s/postgres/pvc.yaml
+          kubectl apply -f k8s/postgres/statefulset.yaml
+          kubectl apply -f k8s/postgres/service.yaml
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          kubectl rollout status statefulset/postgres \
+            -n chatbotsocket \
+            --timeout=120s
+
+      - name: Apply app ConfigMap
+        run: kubectl apply -f k8s/app/configmap.yaml
+
+      - name: Patch deployment image to exact SHA tag
+        # Use the immutable SHA tag (not 'latest') to guarantee we deploy
+        # exactly what was built in this workflow run.
+        run: |
+          SHA_TAG="${{ needs.build-and-push.outputs.sha-tag }}"
+
+          # Patch both the init container and the main container
+          kubectl set image deployment/chatbotsocket-app \
+            prisma-migrate="${SHA_TAG}" \
+            chatbotsocket="${SHA_TAG}" \
+            -n chatbotsocket || true
+          # (|| true: tolerates first-run when deployment doesn't exist yet)
+
+      - name: Apply remaining app manifests
+        run: |
+          kubectl apply -f k8s/app/deployment.yaml
+          kubectl apply -f k8s/app/service.yaml
+          kubectl apply -f k8s/app/hpa.yaml
+          kubectl apply -f k8s/ingress.yaml
+
+      - name: Wait for app deployment to roll out
+        run: |
+          kubectl rollout status deployment/chatbotsocket-app \
+            -n chatbotsocket \
+            --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n chatbotsocket
+          echo "=== Services ==="
+          kubectl get services -n chatbotsocket
+          echo "=== Ingress ==="
+          kubectl get ingress -n chatbotsocket

@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatbotsocket-app
+  namespace: chatbotsocket
+  labels:
+    app: chatbotsocket
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chatbotsocket
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: chatbotsocket
+    spec:
+      # Allow time for in-flight SSE streams to complete before pod termination
+      terminationGracePeriodSeconds: 60
+
+      # Init container: run Prisma migrations before the app starts.
+      # Uses the same image as the main container but overrides CMD.
+      # `prisma migrate deploy` is idempotent — safe to run on every pod start.
+      initContainers:
+        - name: prisma-migrate
+          # CI/CD patches this to the exact SHA tag (e.g. sha-abc1234) on each deploy.
+          # Using 'latest' here as a fallback default.
+          image: ghcr.io/OWNER/chatbotsocket:latest
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -c
+            - |
+              echo "Running Prisma migrations..."
+              node_modules/.bin/prisma migrate deploy
+              echo "Migrations complete."
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chatbotsocket-secrets
+                  key: DATABASE_URL
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+
+      containers:
+        - name: chatbotsocket
+          # CI/CD patches this to the exact SHA tag on each deploy.
+          image: ghcr.io/OWNER/chatbotsocket:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3100
+              name: http
+          env:
+            # Non-secret config
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NODE_ENV
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PORT
+            - name: HOSTNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: HOSTNAME
+            - name: NEXTAUTH_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NEXTAUTH_URL
+            # Secrets
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chatbotsocket-secrets
+                  key: DATABASE_URL
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chatbotsocket-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chatbotsocket-secrets
+                  key: GEMINI_API_KEY
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chatbotsocket-secrets
+                  key: NEXTAUTH_SECRET
+          readinessProbe:
+            httpGet:
+              path: /api/conversations
+              port: 3100
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /api/conversations
+              port: 3100
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

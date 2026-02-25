@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatbotsocket-service
+  namespace: chatbotsocket
+  labels:
+    app: chatbotsocket
+spec:
+  type: ClusterIP
+  selector:
+    app: chatbotsocket
+  ports:
+    - port: 80
+      targetPort: 3100
+      protocol: TCP
+      name: http

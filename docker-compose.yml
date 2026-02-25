@@ -1,0 +1,65 @@
+version: '3.9'
+
+# Local development only.
+# For production, use the Kubernetes manifests in k8s/.
+#
+# Usage:
+#   1. Copy .env.example to .env and fill in ANTHROPIC_API_KEY, GEMINI_API_KEY, NEXTAUTH_SECRET
+#   2. docker-compose up --build
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: chatbot-postgres-compose
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_chatbot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_chatbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Use builder stage for dev so full node_modules are available for hot-reload
+      target: builder
+    container_name: chatbotsocket-app
+    restart: unless-stopped
+    # Override the production CMD with the dev workflow
+    command: >
+      sh -c "npm run db:generate &&
+             npx prisma migrate deploy &&
+             npm run dev"
+    ports:
+      - "3100:3100"
+    environment:
+      # Inside Docker, use the service name as the hostname (NOT 127.0.0.1)
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ai_chatbot
+      NODE_ENV: development
+      NEXTAUTH_URL: http://localhost:3100
+    env_file:
+      # Create .env from .env.example; add ANTHROPIC_API_KEY, GEMINI_API_KEY, NEXTAUTH_SECRET
+      - .env
+    volumes:
+      # Mount source for hot-reload
+      - .:/app
+      # Exclude these from the bind mount — use the container's own copies
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
