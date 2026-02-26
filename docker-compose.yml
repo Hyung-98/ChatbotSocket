@@ -31,8 +31,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      # Use builder stage for dev so full node_modules are available for hot-reload
-      target: builder
+      # Use deps stage: only runs `npm ci`, no next build step.
+      # Source code is injected at runtime via the volume mount below.
+      target: deps
     container_name: chatbotsocket-app
     restart: unless-stopped
     # Override the production CMD with the dev workflow

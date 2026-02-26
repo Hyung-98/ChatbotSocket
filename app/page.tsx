@@ -1,6 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import { ChatInterface } from '@/components/ChatInterface';
 
+// This page queries the database on every request — disable static prerendering
+// so next build doesn't try to connect to a DB that doesn't exist at build time.
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
   let conversation = await prisma.conversation.findFirst({
     orderBy: { updatedAt: 'desc' },
