@@ -132,10 +132,10 @@ jobs:
     name: Deploy to Kubernetes
     runs-on: ubuntu-latest
     needs: build-and-push
-    # Only run on main branch pushes (not PRs, not other branches)
-    if: >
-      github.ref == 'refs/heads/main' &&
-      github.event_name != 'pull_request'
+    # Only run when manually triggered with deploy=true.
+    # For local minikube, apply k8s/ manifests manually instead (see k8s/ingress.yaml).
+    # To deploy: Actions → Run workflow → check "Deploy to Kubernetes"
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true'
     # To add a manual approval gate: create an Environment named "production" in
     # GitHub repo Settings → Environments, then uncomment the line below.
     # environment: production
