@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { anthropic, CLAUDE_MODEL, DEFAULT_MAX_TOKENS } from "@/lib/anthropic";
+import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
 import { gemini, GEMINI_MODEL } from "@/lib/google";
 import type { ChatMessage, StreamResponse } from "@/lib/types";
 
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     data: { conversationId, role: "USER", content: message.trim() },
   });
 
-  const chatHistory: ChatMessage[] = conversation.messages.map((m: any) => ({
+  const chatHistory: ChatMessage[] = conversation.messages.map((m) => ({
     role: m.role === "USER" ? "user" : "assistant",
     content: m.content,
   }));
