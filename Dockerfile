@@ -70,17 +70,6 @@ COPY --from=builder /app/.next/static ./.next/static
 # public/ directory (if it exists)
 COPY --from=builder /app/public ./public
 
-# Copy Prisma files needed by the init container (prisma migrate deploy)
-# The runner CMD runs `node server.js`, but when used as a K8s init container
-# the CMD is overridden to `npx prisma migrate deploy`.
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-
-# Copy the Prisma CLI and engines from builder so `npx prisma` works in init container
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-
 # Set correct ownership
 RUN chown -R nextjs:nodejs /app
 
@@ -90,3 +79,40 @@ EXPOSE 3100
 
 # standalone server.js reads PORT from environment automatically
 CMD ["node", "server.js"]
+
+# ============================================================
+# Stage 4: Migrator (runs `prisma migrate deploy` as K8s init container)
+#
+# Uses the full node_modules from the deps stage so that the Prisma 7 CLI
+# and all its transitive dependencies (@prisma/dev, valibot, etc.) are available.
+# The runner stage is intentionally minimal and cannot run the Prisma CLI.
+# ============================================================
+FROM node:20-alpine AS migrator
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Full node_modules — required for Prisma CLI and prisma.config.ts execution
+COPY --from=deps /app/node_modules ./node_modules
+
+# Prisma schema, config, and migration files
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+# package.json is referenced by prisma.config.ts tooling
+COPY --from=builder /app/package.json ./package.json
+
+# Docker COPY may resolve symlinks; ensure .bin/prisma stays a proper symlink
+# so that __dirname resolves to node_modules/prisma/build/ where package.json lives.
+RUN rm -f node_modules/.bin/prisma && \
+    ln -sf ../prisma/build/index.js node_modules/.bin/prisma
+
+# Security: non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
+
+CMD ["node_modules/.bin/prisma", "migrate", "deploy"]

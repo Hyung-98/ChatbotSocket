@@ -69,6 +69,7 @@ jobs:
 
     outputs:
       sha-tag: ${{ steps.sha-tag.outputs.tag }}
+      migrate-sha-tag: ${{ steps.sha-tag.outputs.migrate-tag }}
 
     steps:
       - name: Checkout code
@@ -86,11 +87,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute SHA tag
+      - name: Compute SHA tags
         id: sha-tag
-        run: echo "tag=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}" >> $GITHUB_OUTPUT
+        run: |
+          echo "tag=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "migrate-tag=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:migrate-sha-${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      - name: Extract Docker metadata
+      - name: Extract Docker metadata (runner)
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -103,16 +106,38 @@ jobs:
             # 'latest' only on main branch pushes
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build and push Docker image
+      - name: Build and push Docker image (runner)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
+          target: runner
           # Only push on main branch push events (not PRs, not other branches)
           push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # GitHub Actions cache for faster subsequent builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract Docker metadata (migrator)
+        id: meta-migrate
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=migrate-sha-,format=long
+            type=raw,value=migrate,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push Docker image (migrator)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: migrator
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta-migrate.outputs.tags }}
+          labels: ${{ steps.meta-migrate.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -150,10 +175,21 @@ jobs:
           version: 'v1.28.0'
 
       - name: Configure kubectl from secret
-        # KUBECONFIG secret must be base64-encoded kubeconfig content
+        # KUBECONFIG secret: base64-encoded kubeconfig file.
+        # How to set it up:
+        #   cat ~/.kube/config | base64 -w 0
+        #   → paste into GitHub repo Settings → Secrets → Actions → KUBECONFIG
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
         run: |
+          if [ -z "$KUBECONFIG_B64" ]; then
+            echo "::error::KUBECONFIG secret is not set."
+            echo "::error::Go to Settings → Secrets → Actions → New secret"
+            echo "::error::Name: KUBECONFIG  Value: \$(cat ~/.kube/config | base64 -w 0)"
+            exit 1
+          fi
           mkdir -p /tmp/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > /tmp/.kube/config
+          echo "$KUBECONFIG_B64" | base64 -d > /tmp/.kube/config
           echo "KUBECONFIG=/tmp/.kube/config" >> $GITHUB_ENV
 
       - name: Apply namespace
@@ -176,14 +212,14 @@ jobs:
         run: kubectl apply -f k8s/app/configmap.yaml
 
       - name: Patch deployment image to exact SHA tag
-        # Use the immutable SHA tag (not 'latest') to guarantee we deploy
-        # exactly what was built in this workflow run.
+        # Use immutable SHA tags to guarantee we deploy exactly what was built.
         run: |
           SHA_TAG="${{ needs.build-and-push.outputs.sha-tag }}"
+          MIGRATE_SHA_TAG="${{ needs.build-and-push.outputs.migrate-sha-tag }}"
 
-          # Patch both the init container and the main container
+          # Patch init container (migrator image) and main container (runner image)
           kubectl set image deployment/chatbotsocket-app \
-            prisma-migrate="${SHA_TAG}" \
+            prisma-migrate="${MIGRATE_SHA_TAG}" \
             chatbotsocket="${SHA_TAG}" \
             -n chatbotsocket || true
           # (|| true: tolerates first-run when deployment doesn't exist yet)

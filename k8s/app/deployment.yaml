@@ -28,17 +28,11 @@ spec:
       # `prisma migrate deploy` is idempotent — safe to run on every pod start.
       initContainers:
         - name: prisma-migrate
-          # CI/CD patches this to the exact SHA tag (e.g. sha-abc1234) on each deploy.
-          # Using 'latest' here as a fallback default.
-          image: ghcr.io/OWNER/chatbotsocket:latest
+          # Uses the separate migrator image which has full node_modules for Prisma CLI.
+          # CI/CD patches this to the exact migrate-sha-{sha} tag on each deploy.
+          # Using ':migrate' here as a fallback default (pushed on every main branch build).
+          image: ghcr.io/hyung-98/chatbotsocket:migrate
           imagePullPolicy: Always
-          command:
-            - sh
-            - -c
-            - |
-              echo "Running Prisma migrations..."
-              node_modules/.bin/prisma migrate deploy
-              echo "Migrations complete."
           env:
             - name: DATABASE_URL
               valueFrom:
@@ -56,7 +50,7 @@ spec:
       containers:
         - name: chatbotsocket
           # CI/CD patches this to the exact SHA tag on each deploy.
-          image: ghcr.io/OWNER/chatbotsocket:latest
+          image: ghcr.io/hyung-98/chatbotsocket:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3100
