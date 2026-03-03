@@ -11,9 +11,9 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  # For minikube: omit storageClassName to use the default "standard" (hostPath) provisioner.
-  # For cloud providers (EKS, GKE, AKS): set the appropriate storage class:
+  # GKE: standard-rwo = Zonal SSD (ReadWriteOnce)
+  # For minikube: comment out storageClassName to use default "standard" (hostPath)
+  # For other cloud providers:
   #   AWS EKS:  storageClassName: gp2
-  #   GKE:      storageClassName: standard-rwo
   #   AKS:      storageClassName: managed-premium
-  # storageClassName: standard
+  storageClassName: standard-rwo

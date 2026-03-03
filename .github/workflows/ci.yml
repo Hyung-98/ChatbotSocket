@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: 'Deploy to Kubernetes after build?'
+        description: "Deploy to Kubernetes after build?"
         required: false
         default: false
         type: boolean
@@ -33,8 +33,8 @@ jobs:
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -65,7 +65,7 @@ jobs:
     needs: lint
     permissions:
       contents: read
-      packages: write   # Required to push to ghcr.io
+      packages: write # Required to push to ghcr.io
 
     outputs:
       sha-tag: ${{ steps.sha-tag.outputs.tag }}
@@ -142,59 +142,59 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ============================================================
-  # Job 3: Deploy to Kubernetes
+  # Job 3: Deploy to Kubernetes (GKE via OIDC)
   #
-  # Prerequisites:
-  #   - Add KUBECONFIG secret to GitHub repo settings:
-  #       Settings → Secrets → Actions → New secret
-  #       Name: KUBECONFIG
-  #       Value: base64-encoded kubeconfig (cat ~/.kube/config | base64 -w 0)
-  #   - Manually create K8s Secret before first deploy:
-  #       kubectl apply -f k8s/secrets/secrets.yaml -n chatbotsocket
-  #   - For local minikube: skip this job and apply manifests manually (see k8s/ingress.yaml comments)
+  # Prerequisites (one-time setup):
+  #   1. GCP Workload Identity Federation configured for this repo
+  #   2. GitHub Secrets registered (Settings → Secrets → Actions):
+  #        GCP_WORKLOAD_IDENTITY_PROVIDER  — projects/.../providers/...
+  #        GCP_SERVICE_ACCOUNT             — sa-name@project.iam.gserviceaccount.com
+  #        GCP_PROJECT_ID                  — your GCP project ID
+  #   3. K8s Secret applied to cluster before first deploy:
+  #        kubectl apply -f k8s/namespace.yaml
+  #        kubectl apply -f k8s/secrets/secrets.yaml
+  #        rm k8s/secrets/secrets.yaml
   # ============================================================
   deploy:
-    name: Deploy to Kubernetes
+    name: Deploy to GKE
     runs-on: ubuntu-latest
     needs: build-and-push
     # Only run when manually triggered with deploy=true.
     # For local minikube, apply k8s/ manifests manually instead (see k8s/ingress.yaml).
-    # To deploy: Actions → Run workflow → check "Deploy to Kubernetes"
+    # To deploy: Actions → Run workflow → check "Deploy to GKE"
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true'
     # To add a manual approval gate: create an Environment named "production" in
     # GitHub repo Settings → Environments, then uncomment the line below.
     # environment: production
 
+    permissions:
+      contents: read
+      id-token: write # 🔥 반드시 필요 (OIDC)
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
+      # 1️⃣ GCP 인증 (OIDC)
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
-          version: 'v1.28.0'
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Configure kubectl from secret
-        # KUBECONFIG secret: base64-encoded kubeconfig file.
-        # How to set it up:
-        #   cat ~/.kube/config | base64 -w 0
-        #   → paste into GitHub repo Settings → Secrets → Actions → KUBECONFIG
-        env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
-        run: |
-          if [ -z "$KUBECONFIG_B64" ]; then
-            echo "::error::KUBECONFIG secret is not set."
-            echo "::error::Go to Settings → Secrets → Actions → New secret"
-            echo "::error::Name: KUBECONFIG  Value: \$(cat ~/.kube/config | base64 -w 0)"
-            exit 1
-          fi
-          mkdir -p /tmp/.kube
-          echo "$KUBECONFIG_B64" | base64 -d > /tmp/.kube/config
-          echo "KUBECONFIG=/tmp/.kube/config" >> $GITHUB_ENV
+      # 2️⃣ GKE credential 자동 구성
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          cluster_name: chatbot-cluster
+          location: asia-northeast3
 
+      # 3️⃣ Namespace
       - name: Apply namespace
         run: kubectl apply -f k8s/namespace.yaml
 
+      # 4️⃣ PostgreSQL
       - name: Apply PostgreSQL manifests
         run: |
           kubectl apply -f k8s/postgres/configmap.yaml
@@ -208,22 +208,22 @@ jobs:
             -n chatbotsocket \
             --timeout=120s
 
+      # 5️⃣ App Config
       - name: Apply app ConfigMap
         run: kubectl apply -f k8s/app/configmap.yaml
 
+      # 6️⃣ SHA 이미지 패치
       - name: Patch deployment image to exact SHA tag
-        # Use immutable SHA tags to guarantee we deploy exactly what was built.
         run: |
           SHA_TAG="${{ needs.build-and-push.outputs.sha-tag }}"
           MIGRATE_SHA_TAG="${{ needs.build-and-push.outputs.migrate-sha-tag }}"
 
-          # Patch init container (migrator image) and main container (runner image)
           kubectl set image deployment/chatbotsocket-app \
             prisma-migrate="${MIGRATE_SHA_TAG}" \
             chatbotsocket="${SHA_TAG}" \
             -n chatbotsocket || true
-          # (|| true: tolerates first-run when deployment doesn't exist yet)
 
+      # 7️⃣ 나머지 리소스 적용
       - name: Apply remaining app manifests
         run: |
           kubectl apply -f k8s/app/deployment.yaml
@@ -231,6 +231,7 @@ jobs:
           kubectl apply -f k8s/app/hpa.yaml
           kubectl apply -f k8s/ingress.yaml
 
+      # 8️⃣ 롤아웃 대기
       - name: Wait for app deployment to roll out
         run: |
           kubectl rollout status deployment/chatbotsocket-app \
@@ -239,9 +240,6 @@ jobs:
 
       - name: Verify deployment
         run: |
-          echo "=== Pods ==="
           kubectl get pods -n chatbotsocket
-          echo "=== Services ==="
           kubectl get services -n chatbotsocket
-          echo "=== Ingress ==="
           kubectl get ingress -n chatbotsocket

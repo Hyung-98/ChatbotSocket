@@ -6,8 +6,6 @@ metadata:
   labels:
     app: chatbotsocket
   annotations:
-    kubernetes.io/ingress.class: "nginx"
-
     # SSE CRITICAL: Disable proxy buffering so stream chunks reach the client immediately.
     # Without this, nginx buffers the entire SSE response and the client sees nothing
     # until the AI finishes generating — defeating the purpose of streaming.
@@ -25,9 +23,13 @@ metadata:
     # Keep upstream connections alive across requests
     nginx.ingress.kubernetes.io/upstream-keepalive-connections: "32"
 spec:
+  # K8s 1.22+ preferred field (replaces kubernetes.io/ingress.class annotation)
+  ingressClassName: nginx
   rules:
-    - host: chatbotsocket.local
-      http:
+    # No host specified → catch-all: accepts traffic from any IP/domain.
+    # After NGINX Controller gets its External IP, update NEXTAUTH_URL in configmap.yaml.
+    # To bind a domain later: add "- host: your-domain.com" and remove the bare "- http:" rule.
+    - http:
         paths:
           - path: /
             pathType: Prefix
@@ -36,8 +38,11 @@ spec:
                 name: chatbotsocket-service
                 port:
                   number: 80
-# To access locally with minikube:
-#   1. minikube addons enable ingress
-#   2. minikube tunnel  (in a separate terminal)
-#   3. echo "127.0.0.1 chatbotsocket.local" | sudo tee -a /etc/hosts
-#   4. Open http://chatbotsocket.local
+# GKE setup:
+#   1. Install NGINX Ingress Controller (once per cluster):
+#        helm upgrade --install ingress-nginx ingress-nginx \
+#          --repo https://kubernetes.github.io/ingress-nginx \
+#          --namespace ingress-nginx --create-namespace
+#   2. Get External IP:
+#        kubectl get svc -n ingress-nginx ingress-nginx-controller
+#   3. Update NEXTAUTH_URL in k8s/app/configmap.yaml with the External IP
