@@ -29,7 +29,8 @@ spec:
     # No host specified → catch-all: accepts traffic from any IP/domain.
     # After NGINX Controller gets its External IP, update NEXTAUTH_URL in configmap.yaml.
     # To bind a domain later: add "- host: your-domain.com" and remove the bare "- http:" rule.
-    - http:
+    - host: chatbotsocket.com
+      http:
         paths:
           - path: /
             pathType: Prefix

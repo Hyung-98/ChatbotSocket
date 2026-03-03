@@ -1,16 +1,19 @@
 # AI Assistant Chatbot
 
-Claude API를 활용한 AI 개인 비서 챗봇 애플리케이션입니다.
+Claude API와 Gemini API를 활용한 AI 개인 비서 챗봇 애플리케이션입니다.
+
+**프로덕션:** [http://chatbotsocket.com](http://chatbotsocket.com)
 
 ## 기술 스택
 
 | 영역 | 기술 |
 |---|---|
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
-| AI | Anthropic Claude API (`claude-sonnet-4-20250514`) |
+| AI | Anthropic Claude API (`claude-sonnet-4-20250514`), Google Gemini API (`gemini-2.5-flash`) |
 | Database | PostgreSQL + Prisma 7 ORM (`@prisma/adapter-pg`) |
 | 실시간 스트리밍 | Server-Sent Events (SSE) |
-| 인프라 | Docker (PostgreSQL 컨테이너) |
+| 인프라 | GKE (Google Kubernetes Engine), NGINX Ingress, Docker |
+| CI/CD | GitHub Actions (lint → build → push to ghcr.io → deploy) |
 
 ## 주요 기능
 
@@ -47,13 +50,30 @@ Claude API를 활용한 AI 개인 비서 챗봇 애플리케이션입니다.
 │
 ├── lib/
 │   ├── anthropic.ts             # Anthropic 클라이언트 싱글턴
+│   ├── google.ts                # Google Gemini 클라이언트 싱글턴
 │   ├── prisma.ts                # Prisma 클라이언트 싱글턴 (adapter-pg)
 │   ├── types.ts                 # 공유 TypeScript 타입
 │   └── utils.ts                 # cn(), formatDate() 유틸리티
 │
 ├── prisma/
 │   └── schema.prisma            # DB 스키마
-└── prisma.config.ts             # Prisma 7 설정 파일
+├── prisma.config.ts             # Prisma 7 설정 파일
+│
+├── k8s/
+│   ├── namespace.yaml
+│   ├── ingress.yaml             # NGINX Ingress (chatbotsocket.com)
+│   ├── app/
+│   │   ├── configmap.yaml
+│   │   ├── deployment.yaml
+│   │   ├── service.yaml
+│   │   └── hpa.yaml
+│   └── postgres/
+│       ├── configmap.yaml
+│       ├── pvc.yaml
+│       ├── statefulset.yaml
+│       └── service.yaml
+│
+└── .github/workflows/ci.yml    # CI/CD 파이프라인
 ```
 
 ## 데이터베이스 스키마
@@ -108,7 +128,10 @@ DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/ai_chatbot?schema=pu
 # Anthropic Claude API 키 (https://console.anthropic.com)
 ANTHROPIC_API_KEY="sk-ant-..."
 
-# NextAuth (현재 미사용, 향후 인증 추가 시 필요)
+# Google Gemini API 키 (https://aistudio.google.com/apikey)
+GEMINI_API_KEY="AIza..."
+
+# NextAuth
 NEXTAUTH_SECRET="랜덤_문자열"
 NEXTAUTH_URL="http://localhost:3000"
 ```
@@ -157,6 +180,36 @@ npm run db:migrate   # 마이그레이션 파일 생성 및 적용 (프로덕션
 npm run db:generate  # Prisma 클라이언트 재생성
 npm run db:studio    # Prisma Studio GUI 실행
 ```
+
+## CI/CD 파이프라인
+
+GitHub Actions를 통해 자동화됩니다:
+
+```
+push to main
+  └─ Lint
+       └─ Build & Push Docker image → ghcr.io
+            └─ Deploy to GKE (workflow_dispatch 수동 트리거 시)
+```
+
+| 단계 | 설명 |
+|---|---|
+| Lint | ESLint 검사 |
+| Build & Push | Docker 이미지 빌드 후 ghcr.io 푸시 (runner + migrator 두 이미지) |
+| Deploy | GKE Workload Identity Federation(OIDC) 인증 후 `kubectl` 배포 |
+
+배포 트리거: GitHub Actions → **Run workflow** → "Deploy to GKE after build?" 체크
+
+## 프로덕션 인프라
+
+| 항목 | 값 |
+|---|---|
+| 클라우드 | GCP (asia-northeast3, 서울) |
+| 클러스터 | `chatbot-cluster` (GKE) |
+| 네임스페이스 | `chatbotsocket` |
+| 외부 IP | `34.50.58.186` |
+| 도메인 | [http://chatbotsocket.com](http://chatbotsocket.com) |
+| 컨테이너 레지스트리 | `ghcr.io/hyung-98/chatbotsocket` |
 
 ## 아키텍처 메모
 

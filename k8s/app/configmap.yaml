@@ -9,6 +9,4 @@ data:
   NODE_ENV: "production"
   PORT: "3100"
   HOSTNAME: "0.0.0.0"
-  # NGINX Ingress Controller External IP (GKE, asia-northeast3)
-  # To update: kubectl get svc -n ingress-nginx ingress-nginx-controller
-  NEXTAUTH_URL: "http://34.50.58.186"
+  NEXTAUTH_URL: "http://chatbotsocket.com"
