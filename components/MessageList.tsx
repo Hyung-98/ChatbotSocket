@@ -18,9 +18,9 @@ export function MessageList({ messages, isStreaming, streamingContent }: Props) 
   }, [messages.length, streamingContent]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+    <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 bg-background">
       {messages.length === 0 && !isStreaming && (
-        <div className="flex h-full items-center justify-center text-gray-400 text-sm">
+        <div className="flex h-full items-center justify-center text-muted text-sm">
           메시지를 입력하여 대화를 시작하세요.
         </div>
       )}

@@ -6,7 +6,7 @@ if (!process.env.GEMINI_API_KEY) {
 
 export const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-export const GEMINI_MODEL = "gemini-2.5-flash";
+export const GEMINI_MODEL = "gemini-3-flash-preview";
 
 // async function main() {
 //   const response = await gemini.models.generateContent({

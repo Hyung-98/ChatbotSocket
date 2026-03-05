@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 type Params = { params: { id: string } };
 
 export async function GET(_request: Request, context: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const id = context?.params?.id;
     if (!id) {
       return NextResponse.json({ error: 'Missing id' }, { status: 400 });
     }
     const conversation = await prisma.conversation.findUniqueOrThrow({
-      where: { id },
+      where: { id, userId: session.user.id },
       include: {
         messages: { orderBy: { createdAt: 'asc' } },
       },
@@ -27,6 +34,11 @@ export async function GET(_request: Request, context: Params) {
 }
 
 export async function PATCH(request: Request, context: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const id = context?.params?.id;
     if (!id) {
@@ -38,7 +50,7 @@ export async function PATCH(request: Request, context: Params) {
     if (typeof body.systemPrompt === 'string') data.systemPrompt = body.systemPrompt;
 
     const conversation = await prisma.conversation.update({
-      where: { id },
+      where: { id, userId: session.user.id },
       data,
     });
     return NextResponse.json(conversation);
@@ -49,12 +61,17 @@ export async function PATCH(request: Request, context: Params) {
 }
 
 export async function DELETE(_request: Request, context: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const id = context?.params?.id;
     if (!id) {
       return NextResponse.json({ error: 'Missing id' }, { status: 400 });
     }
-    await prisma.conversation.delete({ where: { id } });
+    await prisma.conversation.delete({ where: { id, userId: session.user.id } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/conversations/[id] error:', error);

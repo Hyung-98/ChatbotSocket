@@ -3,14 +3,24 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #E8E4DA;
+  --foreground: #2D2A24;
+  --bg-surface: #F5F2EC;
+  --bg-surface-alt: #EDEAE2;
+  --border-subtle: #D6D1C7;
+  --text-muted: #8C8579;
+  --accent: #2D2A24;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1C1A17;
+    --foreground: #EDE9E0;
+    --bg-surface: #252320;
+    --bg-surface-alt: #2E2B27;
+    --border-subtle: #3A3630;
+    --text-muted: #7A7570;
+    --accent: #EDE9E0;
   }
 }
 
@@ -28,7 +38,7 @@ body {
 
 /* Custom scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -36,12 +46,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  background: var(--border-subtle);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--text-muted);
 }
 
 /* Animation for streaming text */
@@ -56,4 +66,13 @@ body {
 
 .animate-pulse-slow {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Sidebar slide animation */
+.sidebar-enter {
+  transform: translateX(-100%);
+}
+.sidebar-enter-active {
+  transform: translateX(0);
+  transition: transform 200ms ease-out;
 }

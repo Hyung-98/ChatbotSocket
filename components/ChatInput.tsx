@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, type KeyboardEvent } from 'react';
+import { SendHorizontal, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -36,35 +37,41 @@ export function ChatInput({ onSend, disabled }: Props) {
   };
 
   return (
-    <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-3 bg-background">
-      <div className="flex items-end gap-2 max-w-4xl mx-auto">
+    <div className="border-t border-[var(--border-subtle)] px-4 py-3 bg-background">
+      <div className="flex items-end gap-2 max-w-2xl mx-auto">
         <textarea
           ref={textareaRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
-          placeholder="메시지를 입력하세요... (Shift+Enter로 줄바꿈)"
+          placeholder="Ask me anything..."
           rows={1}
           disabled={disabled}
           className={cn(
-            'flex-1 resize-none rounded-xl border border-gray-300 dark:border-gray-600',
-            'bg-white dark:bg-gray-900 px-4 py-2.5 text-sm',
-            'focus:outline-none focus:ring-2 focus:ring-blue-500',
-            'placeholder:text-gray-400 disabled:opacity-50 min-h-[44px]'
+            'flex-1 resize-none rounded-2xl border border-[var(--border-subtle)]',
+            'bg-surface px-4 py-2.5 text-sm text-foreground',
+            'focus:outline-none focus:ring-1 focus:ring-[var(--border-subtle)]',
+            'placeholder:text-muted disabled:opacity-50 min-h-[44px]',
+            'transition-shadow'
           )}
         />
         <button
           onClick={handleSend}
           disabled={disabled || !value.trim()}
+          aria-label={disabled ? '생성 중' : '전송'}
           className={cn(
-            'rounded-xl px-4 py-2.5 text-sm font-medium text-white',
-            'bg-blue-600 hover:bg-blue-700',
+            'rounded-xl w-11 h-11 flex items-center justify-center shrink-0',
+            'bg-accent text-[var(--bg-surface)]',
             'disabled:opacity-40 disabled:cursor-not-allowed',
-            'transition-colors h-[44px] shrink-0'
+            'hover:opacity-80 transition-opacity'
           )}
         >
-          {disabled ? '생성 중...' : '전송'}
+          {disabled ? (
+            <Square size={16} fill="currentColor" />
+          ) : (
+            <SendHorizontal size={18} />
+          )}
         </button>
       </div>
     </div>

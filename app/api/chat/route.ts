@@ -1,11 +1,20 @@
 import { prisma } from "@/lib/prisma";
-import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
 import { gemini, GEMINI_MODEL } from "@/lib/google";
 import type { ChatMessage, StreamResponse } from "@/lib/types";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   let conversationId: string;
   let message: string;
 
@@ -31,7 +40,7 @@ export async function POST(request: Request) {
   }
 
   const conversation = await prisma.conversation.findUnique({
-    where: { id: conversationId },
+    where: { id: conversationId, userId: session.user.id },
     include: { messages: { orderBy: { createdAt: "asc" } } },
   });
 
@@ -147,21 +156,12 @@ export async function POST(request: Request) {
 }
 
 async function generateTitle(conversationId: string, firstMessage: string) {
-  const response = await anthropic.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: 30,
-    messages: [
-      {
-        role: "user",
-        content: `다음 메시지를 보고 대화 제목을 한국어로 20자 이내로 만들어줘. 제목만 출력하고 다른 설명은 하지 마.\n\n메시지: ${firstMessage}`,
-      },
-    ],
+  const response = await gemini.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: `다음 메시지를 보고 대화 제목을 한국어로 20자 이내로 만들어줘. 제목만 출력하고 다른 설명은 하지 마.\n\n메시지: ${firstMessage}`,
   });
 
-  const title =
-    response.content[0]?.type === "text"
-      ? response.content[0].text.trim().slice(0, 20)
-      : "새 대화";
+  const title = response.text?.trim().slice(0, 20) ?? "새 대화";
 
   await prisma.conversation.update({
     where: { id: conversationId },

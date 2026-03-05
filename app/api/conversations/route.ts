@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const conversations = await prisma.conversation.findMany({
+      where: { userId: session.user.id },
       orderBy: { updatedAt: 'desc' },
       select: {
         id: true,
@@ -22,6 +30,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
     const systemPrompt: string | undefined = body.systemPrompt;
@@ -29,6 +42,7 @@ export async function POST(request: Request) {
     const conversation = await prisma.conversation.create({
       data: {
         title: '새 대화',
+        userId: session.user.id,
         ...(systemPrompt ? { systemPrompt } : {}),
       },
     });

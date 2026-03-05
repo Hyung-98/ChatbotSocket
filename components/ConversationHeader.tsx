@@ -1,93 +1,122 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { signOut, useSession } from 'next-auth/react';
+import { Menu, Settings, LogOut } from 'lucide-react';
 import type { Conversation } from '@/lib/types';
 import { SystemPromptModal } from './SystemPromptModal';
+import { cn } from '@/lib/utils';
 
 interface Props {
   conversation: Conversation;
-  conversations: Conversation[];
-  onNewConversation: () => void;
-  onSwitch: (id: string) => void;
+  onToggleSidebar: () => void;
   onSystemPromptSaved: (prompt: string) => void;
 }
 
 export function ConversationHeader({
   conversation,
-  conversations,
-  onNewConversation,
-  onSwitch,
+  onToggleSidebar,
   onSystemPromptSaved,
 }: Props) {
+  const { data: session } = useSession();
   const [showModal, setShowModal] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
+  const avatarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
+      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+        setShowAvatarMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  const initials = session?.user?.name
+    ? session.user.name.slice(0, 1).toUpperCase()
+    : session?.user?.email
+    ? session.user.email.slice(0, 1).toUpperCase()
+    : 'U';
+
   return (
-    <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-background shrink-0">
-      <div className="flex items-center gap-2 min-w-0" ref={dropdownRef}>
-        <div className="relative">
-          <button
-            onClick={() => setShowDropdown((v) => !v)}
-            className="flex items-center gap-1 text-sm font-semibold max-w-[240px] truncate hover:text-blue-600 transition-colors"
-          >
-            <span className="truncate">{conversation.title}</span>
-            <span className="text-gray-400 shrink-0">▾</span>
-          </button>
+    <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-background shrink-0">
+      {/* Left: hamburger */}
+      <button
+        onClick={onToggleSidebar}
+        className="p-2 rounded-xl hover:bg-[var(--bg-surface-alt)] transition-colors"
+        aria-label="대화 목록 열기"
+      >
+        <Menu size={20} className="text-foreground" />
+      </button>
 
-          {showDropdown && (
-            <div className="absolute top-full left-0 mt-1 w-72 rounded-xl border border-gray-200 dark:border-gray-700 bg-background shadow-lg z-40 max-h-80 overflow-y-auto">
-              {conversations.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-gray-400">대화 없음</div>
-              ) : (
-                conversations.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => {
-                      onSwitch(c.id);
-                      setShowDropdown(false);
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 truncate transition-colors ${
-                      c.id === conversation.id ? 'text-blue-600 font-medium' : ''
-                    }`}
-                  >
-                    {c.title}
-                  </button>
-                ))
-              )}
-            </div>
+      {/* Center: title */}
+      <h1 className="text-sm font-semibold text-foreground truncate max-w-[200px] sm:max-w-xs">
+        {conversation.title}
+      </h1>
+
+      {/* Right: avatar with dropdown */}
+      <div className="relative" ref={avatarRef}>
+        <button
+          onClick={() => setShowAvatarMenu((v) => !v)}
+          className={cn(
+            'w-9 h-9 rounded-full flex items-center justify-center',
+            'bg-accent text-[var(--bg-surface)] text-sm font-semibold',
+            'hover:opacity-80 transition-opacity shrink-0'
           )}
-        </div>
-      </div>
+          aria-label="사용자 메뉴"
+        >
+          {session?.user?.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={session.user.image}
+              alt="avatar"
+              className="w-full h-full rounded-full object-cover"
+            />
+          ) : (
+            initials
+          )}
+        </button>
 
-      <div className="flex items-center gap-2 shrink-0">
-        <button
-          onClick={() => setShowModal(true)}
-          title="시스템 프롬프트 설정"
-          className={`rounded-lg p-2 transition-colors ${
-            conversation.systemPrompt
-              ? 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-              : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
-        >
-          ⚙️
-        </button>
-        <button
-          onClick={onNewConversation}
-          className="rounded-lg px-3 py-1.5 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-        >
-          새 대화
-        </button>
+        {showAvatarMenu && (
+          <div className={cn(
+            'absolute top-full right-0 mt-2 w-48 rounded-xl z-40',
+            'bg-surface border border-[var(--border-subtle)] shadow-lg overflow-hidden'
+          )}>
+            {session?.user?.email && (
+              <div className="px-4 py-2.5 border-b border-[var(--border-subtle)]">
+                <p className="text-xs text-muted truncate">{session.user.email}</p>
+              </div>
+            )}
+            <button
+              onClick={() => {
+                setShowAvatarMenu(false);
+                setShowModal(true);
+              }}
+              className={cn(
+                'w-full flex items-center gap-2.5 px-4 py-2.5 text-sm',
+                'hover:bg-[var(--bg-surface-alt)] transition-colors text-left',
+                conversation.systemPrompt ? 'text-foreground font-medium' : 'text-foreground/70'
+              )}
+            >
+              <Settings size={15} />
+              시스템 프롬프트
+              {conversation.systemPrompt && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setShowAvatarMenu(false);
+                signOut({ callbackUrl: '/login' });
+              }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground/70 hover:bg-[var(--bg-surface-alt)] transition-colors text-left"
+            >
+              <LogOut size={15} />
+              로그아웃
+            </button>
+          </div>
+        )}
       </div>
 
       {showModal && (
