@@ -98,9 +98,19 @@ spec:
                 secretKeyRef:
                   name: chatbotsocket-secrets
                   key: NEXTAUTH_SECRET
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: chatbotsocket-secrets
+                  key: GITHUB_CLIENT_ID
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chatbotsocket-secrets
+                  key: GITHUB_CLIENT_SECRET
           readinessProbe:
             httpGet:
-              path: /api/conversations
+              path: /api/health
               port: 3100
             initialDelaySeconds: 15
             periodSeconds: 10
@@ -108,7 +118,7 @@ spec:
             successThreshold: 1
           livenessProbe:
             httpGet:
-              path: /api/conversations
+              path: /api/health
               port: 3100
             initialDelaySeconds: 30
             periodSeconds: 20
