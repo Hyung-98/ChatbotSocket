@@ -1,7 +1,7 @@
 version: '3.9'
 
 # Local development only.
-# For production, use the Kubernetes manifests in k8s/.
+# For production, deploy via Railway (see railway.json).
 #
 # Prerequisites:
 #   - chatbot-postgres container must be running: docker start chatbot-postgres

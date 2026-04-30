@@ -64,6 +64,21 @@ Copy `.env.example` to `.env`:
 - `POST /api/conversations` — create a conversation
 - `DELETE /api/conversations/:id` — delete a conversation
 
+## Deployment
+
+Production runs on **Railway** (railway.app).
+
+- [railway.json](railway.json) — build target (`runner` stage of Dockerfile) and deploy config
+- Environment variables are set in the Railway dashboard; `DATABASE_URL` and `PORT` are auto-injected by Railway
+- DB migrations run automatically via `preDeployCommand: prisma migrate deploy` before each deploy
+- CI/CD: GitHub Actions runs lint → build → pushes runner image to GHCR → triggers Railway deploy webhook on `main` push
+- Add `RAILWAY_DEPLOY_WEBHOOK` to GitHub repo Secrets (Railway dashboard → Settings → Deploy Webhook)
+
+**First-time Railway setup:**
+1. Create project → add PostgreSQL plugin → connect GitHub repo
+2. Set env vars in Railway dashboard (see `.env.example` for required keys; skip `DATABASE_URL` and `PORT`)
+3. Add `RAILWAY_DEPLOY_WEBHOOK` secret to GitHub repo Settings → Secrets → Actions
+
 ## Styling
 
 Tailwind CSS with the `cn()` helper ([lib/utils.ts](lib/utils.ts)) wrapping `clsx` + `tailwind-merge`. Global styles and the `.animate-pulse-slow` class (for streaming cursor) are in [app/globals.css](app/globals.css). Supports dark mode via `prefers-color-scheme`.

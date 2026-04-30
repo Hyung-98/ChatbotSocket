@@ -58,7 +58,6 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 ENV NODE_ENV="production"
-ENV PORT=3100
 ENV HOSTNAME="0.0.0.0"
 
 # Copy the Next.js standalone server output
@@ -69,6 +68,16 @@ COPY --from=builder /app/.next/static ./.next/static
 
 # public/ directory (if it exists)
 COPY --from=builder /app/public ./public
+
+# Prisma CLI for pre-deploy migration (railway.json preDeployCommand).
+# Docker COPY dereferences symlinks, so the .bin/prisma symlink must be recreated.
+COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder /app/package.json ./package.json
+RUN rm -f node_modules/.bin/prisma && \
+    ln -sf ../prisma/build/index.js node_modules/.bin/prisma
 
 # Set correct ownership
 RUN chown -R nextjs:nodejs /app
@@ -81,11 +90,12 @@ EXPOSE 3100
 CMD ["node", "server.js"]
 
 # ============================================================
-# Stage 4: Migrator (runs `prisma migrate deploy` as K8s init container)
+# Stage 4: Migrator (standalone migration runner)
 #
 # Uses the full node_modules from the deps stage so that the Prisma 7 CLI
 # and all its transitive dependencies (@prisma/dev, valibot, etc.) are available.
-# The runner stage is intentionally minimal and cannot run the Prisma CLI.
+# On Railway, migrations are handled via railway.json preDeployCommand in the runner image.
+# This stage is kept as a reference for alternative deployment environments.
 # ============================================================
 FROM node:20-alpine AS migrator
 
