@@ -38,8 +38,9 @@ Dockerfile
 docker-compose.yml
 docker/
 
-# Kubernetes manifests (not needed inside the image)
-k8s/
+# Legacy Turborepo sub-packages (not part of the main Next.js app)
+apps/
+packages/
 
 # Documentation
 *.md
