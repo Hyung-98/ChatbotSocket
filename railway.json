@@ -6,7 +6,8 @@
     "buildTarget": "runner"
   },
   "deploy": {
-    "startCommand": "node_modules/.bin/prisma migrate deploy && node server.js",
+    "preDeployCommand": "node_modules/.bin/prisma migrate deploy",
+    "startCommand": "node server.js",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
