@@ -104,14 +104,17 @@ COPY --from=builder /app/.next/static ./.next/static
 # public/ directory (if it exists)
 COPY --from=builder /app/public ./public
 
-# Prisma CLI for pre-deploy migration (railway.json preDeployCommand).
+# Full node_modules from deps (provides Prisma CLI with all transitive dependencies).
+# Replaces standalone's minimal node_modules — all runtime deps are a superset.
 # Docker COPY dereferences symlinks, so the .bin/prisma symlink must be recreated.
-COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=deps /app/node_modules ./node_modules
+
+# Restore the generated Prisma client (prisma generate output is in builder, not deps).
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./package.json
-RUN mkdir -p node_modules/.bin && \
-    rm -f node_modules/.bin/prisma && \
+RUN rm -f node_modules/.bin/prisma && \
     ln -sf ../prisma/build/index.js node_modules/.bin/prisma
 
 # Set correct ownership
