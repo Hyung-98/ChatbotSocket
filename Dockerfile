@@ -113,6 +113,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/package.json ./package.json
 RUN rm -f node_modules/.bin/prisma && \
     ln -sf ../prisma/build/index.js node_modules/.bin/prisma
