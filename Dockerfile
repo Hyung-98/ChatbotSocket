@@ -35,7 +35,6 @@ RUN npm run db:generate
 # lib/anthropic.ts and lib/google.ts throw at module load if API keys are absent.
 # next build statically analyzes routes and imports these files.
 # Pass dummy build-time placeholders so the throw never fires.
-# These values are NEVER used for actual API calls — real secrets come from K8s Secrets at runtime.
 ENV ANTHROPIC_API_KEY="build-time-placeholder"
 ENV GEMINI_API_KEY="build-time-placeholder"
 ENV NEXTAUTH_SECRET="build-time-placeholder"
@@ -45,7 +44,43 @@ ENV NODE_ENV="production"
 RUN npm run build
 
 # ============================================================
-# Stage 3: Production runner (minimal image)
+# Stage 3: Migrator (standalone migration runner)
+#
+# Uses the full node_modules from the deps stage so that the Prisma 7 CLI
+# and all its transitive dependencies (@prisma/dev, valibot, etc.) are available.
+# ============================================================
+FROM node:20-alpine AS migrator
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Full node_modules — required for Prisma CLI and prisma.config.ts execution
+COPY --from=deps /app/node_modules ./node_modules
+
+# Prisma schema, config, and migration files
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+# package.json is referenced by prisma.config.ts tooling
+COPY --from=builder /app/package.json ./package.json
+
+# Docker COPY may resolve symlinks; ensure .bin/prisma stays a proper symlink
+# so that __dirname resolves to node_modules/prisma/build/ where package.json lives.
+RUN rm -f node_modules/.bin/prisma && \
+    ln -sf ../prisma/build/index.js node_modules/.bin/prisma
+
+# Security: non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
+
+CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
+
+# ============================================================
+# Stage 4: Production runner (minimal image) — MUST be last so Railway builds this
 # ============================================================
 FROM node:20-alpine AS runner
 
@@ -87,41 +122,3 @@ EXPOSE 3100
 
 # standalone server.js reads PORT from environment automatically
 CMD ["node", "server.js"]
-
-# ============================================================
-# Stage 4: Migrator (standalone migration runner)
-#
-# Uses the full node_modules from the deps stage so that the Prisma 7 CLI
-# and all its transitive dependencies (@prisma/dev, valibot, etc.) are available.
-# On Railway, migrations are handled via railway.json preDeployCommand in the runner image.
-# This stage is kept as a reference for alternative deployment environments.
-# ============================================================
-FROM node:20-alpine AS migrator
-
-RUN apk add --no-cache libc6-compat
-
-WORKDIR /app
-
-# Full node_modules — required for Prisma CLI and prisma.config.ts execution
-COPY --from=deps /app/node_modules ./node_modules
-
-# Prisma schema, config, and migration files
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-
-# package.json is referenced by prisma.config.ts tooling
-COPY --from=builder /app/package.json ./package.json
-
-# Docker COPY may resolve symlinks; ensure .bin/prisma stays a proper symlink
-# so that __dirname resolves to node_modules/prisma/build/ where package.json lives.
-RUN rm -f node_modules/.bin/prisma && \
-    ln -sf ../prisma/build/index.js node_modules/.bin/prisma
-
-# Security: non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
-RUN chown -R nextjs:nodejs /app
-
-USER nextjs
-
-CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
