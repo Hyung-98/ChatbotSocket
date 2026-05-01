@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev          # Start Next.js dev server on port 3000
+npm run dev          # Start Next.js dev server on port 3100
 npm run build        # Production build
 npm run lint         # ESLint
 
@@ -31,6 +31,8 @@ Single Next.js 14 App Router application (no monorepo). All API logic lives in R
 **Key singletons:**
 - [lib/prisma.ts](lib/prisma.ts) — singleton `PrismaClient` (cached on `globalThis` to survive hot-reloads)
 - [lib/anthropic.ts](lib/anthropic.ts) — singleton `Anthropic` client; exports `CLAUDE_MODEL` and `DEFAULT_MAX_TOKENS` (4096). The model is currently `claude-sonnet-4-20250514` — update here to change the model globally.
+- [lib/google.ts](lib/google.ts) — singleton `GoogleGenAI` client; exports `GEMINI_MODEL` (`gemini-3-flash-preview`) and `gemini` instance. Throws at module load if `GEMINI_API_KEY` is absent.
+- [lib/auth.ts](lib/auth.ts) — NextAuth `authOptions` (Credentials + GitHub OAuth providers)
 
 **Types** ([lib/types.ts](lib/types.ts)):
 - `ChatMessage` — `{ role: 'user'|'assistant', content }` — the shape sent to the Claude API
@@ -39,12 +41,19 @@ Single Next.js 14 App Router application (no monorepo). All API logic lives in R
 
 ## Database Schema
 
-Three models in [prisma/schema.prisma](prisma/schema.prisma):
-- `User` (cuid PK, email unique) → has many `Conversation`
-- `Conversation` (title, userId FK) → has many `Message`; indexed on `userId` and `createdAt`
+Six models in [prisma/schema.prisma](prisma/schema.prisma):
+
+**App models:**
+- `User` (cuid PK, email unique, optional `passwordHash` for credentials auth) → has many `Conversation`, `Account`, `Session`
+- `Conversation` (title, optional `systemPrompt`, optional `userId` FK) → has many `Message`; indexed on `userId`, `createdAt`, `updatedAt`
 - `Message` (conversationId FK, `Role` enum: USER/ASSISTANT/SYSTEM, text content); indexed on `conversationId` and `createdAt`
 
-Cascade deletes: deleting a User deletes its Conversations; deleting a Conversation deletes its Messages.
+**NextAuth adapter models** (managed by NextAuth, do not modify manually):
+- `Account` — OAuth provider accounts linked to a User
+- `Session` — active sessions
+- `VerificationToken` — email verification tokens
+
+Cascade deletes: User → Conversation → Message. User → Account, Session.
 
 ## Environment Variables
 
@@ -54,15 +63,23 @@ Copy `.env.example` to `.env`:
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `ANTHROPIC_API_KEY` | Claude API key (required at module load — see [lib/anthropic.ts](lib/anthropic.ts)) |
+| `GEMINI_API_KEY` | Google Gemini API key (required at module load — see [lib/google.ts](lib/google.ts)) |
 | `NEXTAUTH_SECRET` | NextAuth encryption key (`openssl rand -base64 32`) |
-| `NEXTAUTH_URL` | App URL (default `http://localhost:3000`) |
+| `NEXTAUTH_URL` | App URL (local: `http://localhost:3100`, prod: Railway URL) |
+| `GITHUB_CLIENT_ID` | GitHub OAuth App client ID (for GitHub login) |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret (for GitHub login) |
 
 ## API Endpoints
 
+- `GET /api/health` — health check; returns `{ status: 'ok' }` (used by Railway healthcheck)
+- `POST /api/auth/signup` — register with email + password; returns `{ id, email }`
+- `GET|POST /api/auth/[...nextauth]` — NextAuth session endpoints (login, logout, OAuth callback)
 - `POST /api/chat` — send a message; returns SSE stream of `StreamResponse` chunks
-- `GET /api/conversations` — list conversations
-- `POST /api/conversations` — create a conversation
-- `DELETE /api/conversations/:id` — delete a conversation
+- `GET /api/conversations` — list conversations (auth required)
+- `POST /api/conversations` — create a conversation (auth required)
+- `GET /api/conversations/:id` — fetch conversation + messages (auth required)
+- `PATCH /api/conversations/:id` — update `title` or `systemPrompt` (auth required)
+- `DELETE /api/conversations/:id` — delete conversation and its messages (auth required)
 
 ## Deployment
 
