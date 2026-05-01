@@ -2,7 +2,7 @@
 
 Claude API와 Gemini API를 활용한 AI 개인 비서 챗봇 애플리케이션입니다.
 
-**프로덕션:** [http://chatbotsocket.com](http://chatbotsocket.com)
+**프로덕션:** [https://chatbotsocket-production.up.railway.app](https://chatbotsocket-production.up.railway.app)
 
 ## 기술 스택
 
@@ -12,7 +12,7 @@ Claude API와 Gemini API를 활용한 AI 개인 비서 챗봇 애플리케이션
 | AI | Anthropic Claude API (`claude-sonnet-4-20250514`), Google Gemini API (`gemini-2.5-flash`) |
 | Database | PostgreSQL + Prisma 7 ORM (`@prisma/adapter-pg`) |
 | 실시간 스트리밍 | Server-Sent Events (SSE) |
-| 인프라 | GKE (Google Kubernetes Engine), NGINX Ingress, Docker |
+| 인프라 | Railway, Docker |
 | CI/CD | GitHub Actions (lint → build → push to ghcr.io → deploy) |
 
 ## 주요 기능
@@ -58,20 +58,7 @@ Claude API와 Gemini API를 활용한 AI 개인 비서 챗봇 애플리케이션
 ├── prisma/
 │   └── schema.prisma            # DB 스키마
 ├── prisma.config.ts             # Prisma 7 설정 파일
-│
-├── k8s/
-│   ├── namespace.yaml
-│   ├── ingress.yaml             # NGINX Ingress (chatbotsocket.com)
-│   ├── app/
-│   │   ├── configmap.yaml
-│   │   ├── deployment.yaml
-│   │   ├── service.yaml
-│   │   └── hpa.yaml
-│   └── postgres/
-│       ├── configmap.yaml
-│       ├── pvc.yaml
-│       ├── statefulset.yaml
-│       └── service.yaml
+├── railway.json                 # Railway 빌드·배포 설정
 │
 └── .github/workflows/ci.yml    # CI/CD 파이프라인
 ```
@@ -133,7 +120,7 @@ GEMINI_API_KEY="AIza..."
 
 # NextAuth
 NEXTAUTH_SECRET="랜덤_문자열"
-NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_URL="http://localhost:3100"
 ```
 
 ### 3. PostgreSQL 데이터베이스 실행
@@ -165,12 +152,12 @@ npm run db:generate  # Prisma 클라이언트 재생성
 npm run dev
 ```
 
-브라우저에서 `http://localhost:3000`을 열어 확인하세요.
+브라우저에서 `http://localhost:3100`을 열어 확인하세요.
 
 ## 개발 명령어
 
 ```bash
-npm run dev          # 개발 서버 실행 (포트 3000)
+npm run dev          # 개발 서버 실행 (포트 3100)
 npm run build        # 프로덕션 빌드
 npm run start        # 프로덕션 서버 실행
 npm run lint         # ESLint 실행
@@ -189,26 +176,24 @@ GitHub Actions를 통해 자동화됩니다:
 push to main
   └─ Lint
        └─ Build & Push Docker image → ghcr.io
-            └─ Deploy to GKE (workflow_dispatch 수동 트리거 시)
+            └─ Trigger Railway deploy webhook (자동)
 ```
 
 | 단계 | 설명 |
 |---|---|
 | Lint | ESLint 검사 |
-| Build & Push | Docker 이미지 빌드 후 ghcr.io 푸시 (runner + migrator 두 이미지) |
-| Deploy | GKE Workload Identity Federation(OIDC) 인증 후 `kubectl` 배포 |
+| Build & Push | Docker 이미지 빌드 후 ghcr.io 푸시 |
+| Deploy | Railway 웹훅 자동 트리거 |
 
-배포 트리거: GitHub Actions → **Run workflow** → "Deploy to GKE after build?" 체크
+배포 트리거: main 브랜치 push → 자동 배포 (수동 트리거 불필요)
 
 ## 프로덕션 인프라
 
 | 항목 | 값 |
 |---|---|
-| 클라우드 | GCP (asia-northeast3, 서울) |
-| 클러스터 | `chatbot-cluster` (GKE) |
-| 네임스페이스 | `chatbotsocket` |
-| 외부 IP | `34.50.58.186` |
-| 도메인 | [http://chatbotsocket.com](http://chatbotsocket.com) |
+| 플랫폼 | Railway (railway.app) |
+| URL | [https://chatbotsocket-production.up.railway.app](https://chatbotsocket-production.up.railway.app) |
+| DB | Railway PostgreSQL 플러그인 (자동 주입) |
 | 컨테이너 레지스트리 | `ghcr.io/hyung-98/chatbotsocket` |
 
 ## 아키텍처 메모
