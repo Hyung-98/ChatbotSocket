@@ -110,7 +110,8 @@ COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./package.json
-RUN rm -f node_modules/.bin/prisma && \
+RUN mkdir -p node_modules/.bin && \
+    rm -f node_modules/.bin/prisma && \
     ln -sf ../prisma/build/index.js node_modules/.bin/prisma
 
 # Set correct ownership
