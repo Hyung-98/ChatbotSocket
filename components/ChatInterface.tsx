@@ -45,7 +45,7 @@ export function ChatInterface({ initialConversation }: Props) {
     [currentConversation.id, updateConversationTitle]
   );
 
-  const { messages, isStreaming, streamingContent, sendMessage, resetMessages } = useChat(
+  const { messages, isStreaming, streamingContent, error, clearError, sendMessage, resetMessages } = useChat(
     currentConversation.id,
     currentConversation.messages,
     { onTitleGenerated: handleTitleGenerated }
@@ -162,6 +162,18 @@ export function ChatInterface({ initialConversation }: Props) {
         isStreaming={isStreaming}
         streamingContent={streamingContent}
       />
+      {error && (
+        <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400">
+          <span className="flex-1">{error}</span>
+          <button
+            onClick={clearError}
+            className="shrink-0 rounded p-0.5 hover:bg-red-100 dark:hover:bg-red-900/50"
+            aria-label="닫기"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
       <ChatInput onSend={sendMessage} disabled={isStreaming} />
     </div>
   );
