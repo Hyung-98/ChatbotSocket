@@ -109,9 +109,9 @@ export async function POST(request: Request) {
           history: geminiHistory,
         });
 
-        const geminiResponse = await chat.sendMessageStream({
-          message: message.trim(),
-        });
+        const geminiResponse = await sendWithRetry(() =>
+          chat.sendMessageStream({ message: message.trim() })
+        );
 
         for await (const chunk of geminiResponse) {
           const text = chunk.text;
@@ -137,9 +137,12 @@ export async function POST(request: Request) {
         controller.enqueue(encode({ type: "done", conversationId }));
         controller.close();
       } catch (error) {
-        const errMsg =
-          error instanceof Error ? error.message : "Streaming error";
         console.error("Chat stream error:", error);
+        const errMsg = isUnavailableError(error)
+          ? "서비스가 일시적으로 혼잡합니다. 잠시 후 다시 시도해주세요."
+          : error instanceof Error
+            ? error.message
+            : "Streaming error";
         controller.enqueue(encode({ type: "error", error: errMsg }));
         controller.close();
       }
@@ -153,6 +156,29 @@ export async function POST(request: Request) {
       Connection: "keep-alive",
     },
   });
+}
+
+function isUnavailableError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const e = error as { status?: number; message?: string };
+  if (e.status === 503) return true;
+  const msg = (e.message ?? "").toLowerCase();
+  return msg.includes("unavailable") || msg.includes("high demand");
+}
+
+async function sendWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let delay = 1000;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === attempts || !isUnavailableError(error)) throw error;
+      const jitter = Math.floor(Math.random() * 250);
+      await new Promise((res) => setTimeout(res, delay + jitter));
+      delay *= 2;
+    }
+  }
+  throw new Error("sendWithRetry: exhausted without result");
 }
 
 async function generateTitle(conversationId: string, firstMessage: string) {

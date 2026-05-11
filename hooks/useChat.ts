@@ -15,6 +15,7 @@ export function useChat(
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -29,6 +30,7 @@ export function useChat(
       setMessages((prev) => [...prev, optimisticUser]);
       setIsStreaming(true);
       setStreamingContent('');
+      setError(null);
 
       try {
         const res = await fetch('/api/chat', {
@@ -84,7 +86,11 @@ export function useChat(
                 options?.onTitleGenerated?.(event.conversationId);
               }
             } else if (event.type === 'error') {
-              throw new Error(event.error ?? 'Stream error');
+              setError(event.error ?? '오류가 발생했습니다. 다시 시도해주세요.');
+              setIsStreaming(false);
+              setStreamingContent('');
+              await reader.cancel();
+              return;
             }
           }
         }
@@ -92,6 +98,7 @@ export function useChat(
         console.error('Chat error:', error);
         setIsStreaming(false);
         setStreamingContent('');
+        setError('오류가 발생했습니다. 다시 시도해주세요.');
       }
     },
     [conversationId, isStreaming, options]
@@ -101,7 +108,10 @@ export function useChat(
     setMessages(msgs);
     setStreamingContent('');
     setIsStreaming(false);
+    setError(null);
   }, []);
 
-  return { messages, isStreaming, streamingContent, sendMessage, resetMessages };
+  const clearError = useCallback(() => setError(null), []);
+
+  return { messages, isStreaming, streamingContent, error, clearError, sendMessage, resetMessages };
 }
