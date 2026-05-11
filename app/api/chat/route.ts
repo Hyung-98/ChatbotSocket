@@ -159,23 +159,26 @@ export async function POST(request: Request) {
 }
 
 function isUnavailableError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const msg = error.message.toLowerCase();
-  return msg.includes("unavailable") || msg.includes("503") || msg.includes("high demand");
+  if (typeof error !== "object" || error === null) return false;
+  const e = error as { status?: number; message?: string };
+  if (e.status === 503) return true;
+  const msg = (e.message ?? "").toLowerCase();
+  return msg.includes("unavailable") || msg.includes("high demand");
 }
 
-async function sendWithRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+async function sendWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   let delay = 1000;
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let i = 1; i <= attempts; i++) {
     try {
       return await fn();
     } catch (error) {
-      if (attempt === retries || !isUnavailableError(error)) throw error;
-      await new Promise((res) => setTimeout(res, delay));
+      if (i === attempts || !isUnavailableError(error)) throw error;
+      const jitter = Math.floor(Math.random() * 250);
+      await new Promise((res) => setTimeout(res, delay + jitter));
       delay *= 2;
     }
   }
-  throw new Error("unreachable");
+  throw new Error("sendWithRetry: exhausted without result");
 }
 
 async function generateTitle(conversationId: string, firstMessage: string) {

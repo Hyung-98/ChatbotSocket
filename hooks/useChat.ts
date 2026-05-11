@@ -89,6 +89,7 @@ export function useChat(
               setError(event.error ?? '오류가 발생했습니다. 다시 시도해주세요.');
               setIsStreaming(false);
               setStreamingContent('');
+              await reader.cancel();
               return;
             }
           }
@@ -97,9 +98,7 @@ export function useChat(
         console.error('Chat error:', error);
         setIsStreaming(false);
         setStreamingContent('');
-        setError(
-          error instanceof Error ? error.message : '오류가 발생했습니다. 다시 시도해주세요.'
-        );
+        setError('오류가 발생했습니다. 다시 시도해주세요.');
       }
     },
     [conversationId, isStreaming, options]

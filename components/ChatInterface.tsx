@@ -163,7 +163,11 @@ export function ChatInterface({ initialConversation }: Props) {
         streamingContent={streamingContent}
       />
       {error && (
-        <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mx-4 mb-2 flex items-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400"
+        >
           <span className="flex-1">{error}</span>
           <button
             onClick={clearError}
